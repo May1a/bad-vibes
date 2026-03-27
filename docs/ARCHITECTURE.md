@@ -22,7 +22,7 @@ bad-vibes is a CLI tool for focused AI-assisted PR review. It provides a streaml
 │  • summary.go   - PR overview                                    │
 │  • review.go    - Display diff                                   │
 │  • comments.go  - Show unresolved threads                        │
-│  • comment.go   - Interactive comment wizard                     │
+│  • comment.go   - Direct CLI comment posting                     │
 │  • resolve.go   - Resolve threads                                │
 │  • anchors.go   - List anchors                                   │
 └─────────────────────────────────────────────────────────────────┘
@@ -100,13 +100,7 @@ type Client struct {
 Built with [bubbletea](https://github.com/charmbracelet/bubbletea) and [bubbles](https://github.com/charmbracelet/bubbles).
 
 **Components:**
-- `CommentModel` - Multi-step comment wizard
 - `ResolveModel` - Interactive thread resolver
-
-**State Machine (Comment Flow):**
-```
-stepFile → stepLine → stepBody → stepAnchor → stepConfirm → Done
-```
 
 ### Cache Layer (`internal/cache/`)
 
@@ -203,19 +197,15 @@ Formatted terminal output
 ### `bv comment` Flow
 
 ```
-User runs: bv comment
+User runs: bv comment --file ... --line ... --body ...
     │
     ▼
-tui.RunCommentFlow()
+cmd/comment.go:RunE
     │
-    ├─► stepFile: Select file (bubbletea list)
-    ├─► stepLine: Enter line number
-    ├─► stepBody: Write comment
-    ├─► stepAnchor: Optional anchor tag
-    └─► stepConfirm: Review and post
-            │
-            ▼
-    github.PostReviewComment() (REST)
+    ├─► resolvePR()
+    ├─► FetchPR()         # for head SHA
+    ├─► PostReviewComment()
+    └─► optional anchor save
             │
             ▼
     GitHub API creates comment

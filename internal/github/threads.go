@@ -155,7 +155,7 @@ func findUnresolvedThreadID(threads []model.ReviewThread, path string, line int,
 		}
 		if path == "" {
 			if t.Path == "" {
-				return t.ID, true, nil
+				matches = append(matches, t)
 			}
 			continue
 		}

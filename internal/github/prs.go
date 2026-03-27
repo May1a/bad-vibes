@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -39,7 +40,7 @@ query ListPRs($owner: String!, $repo: String!, $branch: String, $states: [PullRe
 // FetchPRs lists PRs for the given repo.
 // branch: "" means all branches.
 // states: e.g. []string{"OPEN"} or []string{"CLOSED", "MERGED"}.
-func FetchPRs(ref model.PRRef, branch string, states []string) ([]model.PR, error) {
+func FetchPRs(client *Client, ctx context.Context, ref model.PRRef, branch string, states []string) ([]model.PR, error) {
 	vars := map[string]any{
 		"owner":  ref.Owner,
 		"repo":   ref.Repo,
@@ -74,7 +75,7 @@ func FetchPRs(ref model.PRRef, branch string, states []string) ([]model.PR, erro
 		} `json:"repository"`
 	}
 
-	if err := graphql(listPRsQuery, vars, &data); err != nil {
+	if err := client.graphql(ctx, listPRsQuery, vars, &data); err != nil {
 		return nil, fmt.Errorf("listing PRs: %w", err)
 	}
 
@@ -101,8 +102,8 @@ func FetchPRs(ref model.PRRef, branch string, states []string) ([]model.PR, erro
 }
 
 // LatestOpenPR returns the most recent open PR for the given branch.
-func LatestOpenPR(ref model.PRRef, branch string) (model.PR, error) {
-	prs, err := FetchPRs(ref, branch, []string{"OPEN"})
+func LatestOpenPR(client *Client, ctx context.Context, ref model.PRRef, branch string) (model.PR, error) {
+	prs, err := FetchPRs(client, ctx, ref, branch, []string{"OPEN"})
 	if err != nil {
 		return model.PR{}, err
 	}

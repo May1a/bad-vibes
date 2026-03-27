@@ -2,6 +2,7 @@ package github
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/may/bad-vibes/internal/model"
 )
@@ -23,6 +24,7 @@ query FetchPR($owner: String!, $repo: String!, $number: Int!) {
       changedFiles
       author { login }
       files(first: 100) {
+        pageInfo { hasNextPage }
         nodes { path }
       }
     }
@@ -50,6 +52,9 @@ func FetchPR(ref model.PRRef) (model.PR, []string, error) {
 					Login string `json:"login"`
 				} `json:"author"`
 				Files struct {
+					PageInfo struct {
+						HasNextPage bool `json:"hasNextPage"`
+					} `json:"pageInfo"`
 					Nodes []struct {
 						Path string `json:"path"`
 					} `json:"nodes"`
@@ -86,6 +91,9 @@ func FetchPR(ref model.PRRef) (model.PR, []string, error) {
 	files := make([]string, 0, len(gql.Files.Nodes))
 	for _, f := range gql.Files.Nodes {
 		files = append(files, f.Path)
+	}
+	if gql.Files.PageInfo.HasNextPage {
+		fmt.Fprintf(os.Stderr, "warning: PR has >100 changed files; file list is truncated\n")
 	}
 
 	return pr, files, nil

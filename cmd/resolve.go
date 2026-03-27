@@ -33,23 +33,47 @@ With --id: resolves the given thread ID (GraphQL node ID or #anchor-tag) directl
 
 		if resolveID != "" {
 			threadID := resolveID
-			// Support #anchor-tag
+			// Support #anchor-tag and the special #PR shorthand for PR-level threads.
 			if strings.HasPrefix(threadID, "#") {
 				tag := strings.TrimPrefix(threadID, "#")
-				anchors, err := cache.ListAnchors(ref)
-				if err != nil {
-					return err
-				}
-				found := false
-				for _, a := range anchors {
-					if a.Tag == tag {
-						threadID = a.ThreadID
-						found = true
-						break
+
+				// #PR resolves the first unresolved PR-level thread (no path).
+				if strings.EqualFold(tag, "PR") {
+					id, ok, err := github.FindUnresolvedThreadAt(ref, "", 0)
+					if err != nil {
+						return err
 					}
-				}
-				if !found {
-					return fmt.Errorf("no anchor %q found for PR #%d", resolveID, ref.Number)
+					if !ok {
+						return fmt.Errorf("no unresolved PR-level thread found for PR #%d", ref.Number)
+					}
+					threadID = id
+				} else {
+					// Anchor lookup — symlink style: use path+line to find the live thread ID.
+					anchors, err := cache.ListAnchors(ref)
+					if err != nil {
+						return err
+					}
+					var anchor *model.Anchor
+					for i := range anchors {
+						if anchors[i].Tag == tag {
+							anchor = &anchors[i]
+							break
+						}
+					}
+					if anchor == nil {
+						return fmt.Errorf("no anchor %q found for PR #%d", resolveID, ref.Number)
+					}
+					// Resolve the live thread ID by location (symlink dereference).
+					id, ok, err := github.FindUnresolvedThreadAt(ref, anchor.Path, anchor.Line)
+					if err != nil {
+						return err
+					}
+					if ok {
+						threadID = id
+					} else {
+						// Fallback: use whatever was stored (may fail, but worth trying).
+						threadID = anchor.ThreadID
+					}
 				}
 			}
 			if err := github.ResolveThread(threadID); err != nil {

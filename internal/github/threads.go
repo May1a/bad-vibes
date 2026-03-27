@@ -133,6 +133,30 @@ func FetchReviewThreads(ref model.PRRef) ([]model.ReviewThread, error) {
 	return allThreads, nil
 }
 
+// FindUnresolvedThreadAt returns the GraphQL node ID of the first unresolved
+// thread at the given file path and line number. Returns ("", false, nil) when
+// no match is found. Pass path="" to match PR-level threads (subjectType "PR").
+func FindUnresolvedThreadAt(ref model.PRRef, path string, line int) (string, bool, error) {
+	threads, err := FetchReviewThreads(ref)
+	if err != nil {
+		return "", false, err
+	}
+	for _, t := range threads {
+		if t.IsResolved {
+			continue
+		}
+		if path == "" {
+			// PR-level thread
+			if t.SubjectType == "PR" || t.Path == "" {
+				return t.ID, true, nil
+			}
+		} else if t.Path == path && t.Line == line {
+			return t.ID, true, nil
+		}
+	}
+	return "", false, nil
+}
+
 const resolveThreadMutation = `
 mutation ResolveThread($threadId: ID!) {
   resolveReviewThread(input: { threadId: $threadId }) {

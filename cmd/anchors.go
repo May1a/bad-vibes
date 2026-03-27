@@ -40,8 +40,8 @@ var anchorsCmd = &cobra.Command{
 				}
 			}
 			snippet := a.Body
-			if len(snippet) > 60 {
-				snippet = snippet[:57] + "..."
+			if len(snippet) > 120 {
+				snippet = snippet[:117] + "..."
 			}
 			fmt.Printf("  %s  %s  %s\n",
 				tag.Render("#"+a.Tag),

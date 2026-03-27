@@ -22,14 +22,24 @@ var prsCmd = &cobra.Command{
 
 By default shows open PRs on the current branch.
 Use --all-branches to see PRs across all branches.
-Use --closed to see closed and merged PRs instead.`,
+Use --closed to see closed and merged PRs instead.
+
+Examples:
+  bv prs                    # open PRs on current branch
+  bv prs --all-branches     # open PRs across all branches
+  bv prs --branch feat/x    # open PRs on a specific branch
+  bv prs --closed           # closed and merged PRs`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		base := repoRef()
 		if base.Owner == "" || base.Repo == "" {
 			return fmt.Errorf("could not detect repository from git remote; ensure you're in a git repo with a GitHub remote")
 		}
 		states := github.StatesFromFlags(prsClosed)
+		if prsAllBranches && prsBranch != "" {
+			return fmt.Errorf("--all-branches and --branch are mutually exclusive")
+		}
 
 		branch := detectedBranch
 		if prsAllBranches {
@@ -38,7 +48,7 @@ Use --closed to see closed and merged PRs instead.`,
 			branch = prsBranch
 		}
 
-		prs, err := github.FetchPRs(base, branch, states)
+		prs, err := github.FetchPRs(ghClient, ctx, base, branch, states)
 		if err != nil {
 			return err
 		}
@@ -85,8 +95,11 @@ Use --closed to see closed and merged PRs instead.`,
 			branchCol := cyan.Render(pr.HeadRefName)
 			author := dim.Render("@" + pr.Author)
 			title := pr.Title
+			if len(title) > 55 {
+				title = title[:54] + "…"
+			}
 
-			fmt.Printf("  %s  %s  %s  %s  %s\n",
+			fmt.Printf("  %s  %s  %-55s  %s  %s\n",
 				num, state, title, branchCol, author,
 			)
 		}

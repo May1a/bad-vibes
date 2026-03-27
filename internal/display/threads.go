@@ -59,10 +59,18 @@ func PrintThreads(threads []model.ReviewThread, anchors []model.Anchor) {
 
 		fmt.Println(border("┌─") + " " + header)
 
+		styleHunk := lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("#475569"))
 		for i, c := range t.Comments {
 			dateFmt := c.CreatedAt.Format("2006-01-02")
 			meta := styleAuthor.Render("@"+c.Author) + "  " + styleDate.Render(dateFmt)
 			fmt.Println(border("│") + "  " + meta)
+
+			if i == 0 && c.DiffHunk != "" {
+				for _, hunkLine := range strings.Split(c.DiffHunk, "\n") {
+					fmt.Println(border("│") + "  " + styleHunk.Render(hunkLine))
+				}
+				fmt.Println(border("│"))
+			}
 
 			for _, bodyLine := range strings.Split(highlightAnchors(c.Body), "\n") {
 				fmt.Println(border("│") + "  " + bodyLine)

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -44,19 +45,28 @@ func (i threadItem) FilterValue() string {
 	return i.Title() + " " + i.Description()
 }
 
+// ResolvedThread holds the ID and display title of a resolved thread.
+type ResolvedThread struct {
+	ID    string
+	Title string
+}
+
 // --- messages ---
 
-type resolvedMsg struct{ id string }
+type resolvedMsg struct {
+	id    string
+	title string
+}
 type resolveErrMsg struct{ err error }
 
 // --- model ---
 
 type ResolveModel struct {
-	list     list.Model
-	spinner  spinner.Model
+	list      list.Model
+	spinner   spinner.Model
 	resolving bool
-	resolved  []string
-	err       error
+	resolved  []ResolvedThread
+	errMsg    string
 	quitting  bool
 }
 
@@ -108,20 +118,26 @@ func (m ResolveModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.resolving = true
 			threadID := selected.thread.ID
+			title := selected.Title()
 			return m, tea.Batch(
 				m.spinner.Tick,
 				func() tea.Msg {
-					if err := github.ResolveThread(threadID); err != nil {
+					if err := github.ResolveThread(github.GetClient(), context.Background(), threadID); err != nil {
 						return resolveErrMsg{err}
 					}
-					return resolvedMsg{id: threadID}
+					return resolvedMsg{id: threadID, title: title}
 				},
 			)
 		}
 
+	case tea.WindowSizeMsg:
+		m.list.SetSize(msg.Width, msg.Height-4)
+		return m, nil
+
 	case resolvedMsg:
 		m.resolving = false
-		m.resolved = append(m.resolved, msg.id)
+		m.errMsg = ""
+		m.resolved = append(m.resolved, ResolvedThread{ID: msg.id, Title: msg.title})
 		// Remove the resolved thread from the list
 		items := m.list.Items()
 		newItems := make([]list.Item, 0, len(items)-1)
@@ -139,7 +155,7 @@ func (m ResolveModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case resolveErrMsg:
 		m.resolving = false
-		m.err = msg.err
+		m.errMsg = msg.err.Error()
 		return m, nil
 
 	case spinner.TickMsg:
@@ -162,24 +178,24 @@ func (m ResolveModel) View() string {
 	if m.resolving {
 		return fmt.Sprintf("\n  %s  Resolving thread...\n", m.spinner.View())
 	}
-	if m.err != nil {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("#ef4444")).Render(
-			fmt.Sprintf("\n  Error: %v\n", m.err),
-		)
+	view := m.list.View()
+	if m.errMsg != "" {
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#ef4444"))
+		view += "\n  " + errStyle.Render("Error: "+m.errMsg)
 	}
-	return m.list.View()
+	return view
 }
 
-// ResolvedIDs returns the list of thread IDs resolved during the session.
-func (m ResolveModel) ResolvedIDs() []string { return m.resolved }
+// Resolved returns the threads resolved during the session.
+func (m ResolveModel) Resolved() []ResolvedThread { return m.resolved }
 
-// RunResolveFlow launches the interactive resolve TUI and returns the IDs resolved.
-func RunResolveFlow(threads []model.ReviewThread) ([]string, error) {
+// RunResolveFlow launches the interactive resolve TUI and returns the resolved threads.
+func RunResolveFlow(threads []model.ReviewThread) ([]ResolvedThread, error) {
 	m := NewResolveModel(threads)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, err := p.Run()
 	if err != nil {
 		return nil, err
 	}
-	return final.(ResolveModel).ResolvedIDs(), nil
+	return final.(ResolveModel).Resolved(), nil
 }

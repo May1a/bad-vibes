@@ -4,6 +4,14 @@ A focused CLI for human-in-the-loop AI PR review.
 
 `gh` dumps too much noise. `bv` surfaces only what matters: unresolved review threads, with tight interactive flows for commenting and resolving — nothing else.
 
+## Features
+
+- 🎯 **Focused** - Only unresolved threads, no noise
+- 🎨 **Beautiful TUI** - Interactive wizards for commenting and resolving
+- ⚡ **Fast** - Retry logic, rate limit handling, and caching
+- 🔗 **Anchors** - Named bookmarks for important threads
+- 🛡️ **Robust** - Comprehensive error handling and timeout support
+
 ---
 
 ## Install
@@ -181,3 +189,45 @@ make test-verbose  # with -race
 make lint          # golangci-lint
 make tidy          # go mod tidy
 ```
+
+### Running Tests
+
+```sh
+# Run all tests
+go test ./...
+
+# Run with coverage
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+
+# Run specific package tests
+go test ./internal/github/...
+```
+
+### Building
+
+```sh
+# Development build
+make build
+
+# Install to GOPATH/bin
+make install
+
+# Cross-compile for all platforms
+make build-all
+```
+
+---
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) - Internal design and data flow
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [API Scopes](docs/API_SCOPES.md) - Required GitHub permissions
+- [Contributing](CONTRIBUTING.md) - How to contribute
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/may/bad-vibes/internal/cache"
@@ -9,7 +10,7 @@ import (
 )
 
 var anchorsCmd = &cobra.Command{
-	Use:   "anchors <PR>",
+	Use:   "anchors [PR]",
 	Short: "List local anchors for a PR",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -39,7 +40,7 @@ var anchorsCmd = &cobra.Command{
 					location = a.Path
 				}
 			}
-			snippet := a.Body
+			snippet := strings.Join(strings.Fields(a.Body), " ")
 			if len(snippet) > 120 {
 				snippet = snippet[:117] + "..."
 			}

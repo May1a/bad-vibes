@@ -9,15 +9,21 @@ import (
 )
 
 var reviewCmd = &cobra.Command{
-	Use:   "review <PR>",
+	Use:   "review [PR]",
 	Short: "Display the PR diff",
-	Args:  cobra.MaximumNArgs(1),
+	Long: `Display the PR diff with colored line numbers.
+
+Examples:
+  bv review      # auto-detect PR from current branch
+  bv review 42   # show diff for PR #42`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		ref, err := resolvePR(args)
 		if err != nil {
 			return err
 		}
-		diff, err := github.FetchDiff(ref)
+		diff, err := github.FetchDiff(ghClient, ctx, ref)
 		if err != nil {
 			return err
 		}

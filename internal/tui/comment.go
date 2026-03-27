@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -47,18 +48,19 @@ type postDoneMsg struct {
 
 // CommentModel is the bubbletea model for the bv comment wizard.
 type CommentModel struct {
-	pr          model.PR
-	ref         model.PRRef
-	step        commentStep
-	fileList    list.Model
-	lineInput   textinput.Model
-	bodyInput   textarea.Model
-	anchorInput textinput.Model
-	spinner     spinner.Model
-	posting     bool
-	result      *CommentResult
-	err         error
-	quitting    bool
+	pr           model.PR
+	ref          model.PRRef
+	step         commentStep
+	fileList     list.Model
+	lineInput    textinput.Model
+	bodyInput    textarea.Model
+	anchorInput  textinput.Model
+	spinner      spinner.Model
+	posting      bool
+	result       *CommentResult
+	err          error
+	lineErr      string
+	quitting     bool
 
 	selectedFile string
 	selectedLine int
@@ -105,14 +107,14 @@ func NewCommentModel(pr model.PR, ref model.PRRef, files []string) CommentModel 
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#22c55e"))
 
 	return CommentModel{
-		pr:          pr,
-		ref:         ref,
-		step:        stepFile,
-		fileList:    l,
-		lineInput:   lineInput,
-		bodyInput:   bodyInput,
-		anchorInput: anchorInput,
-		spinner:     sp,
+		pr:           pr,
+		ref:          ref,
+		step:         stepFile,
+		fileList:     l,
+		lineInput:    lineInput,
+		bodyInput:    bodyInput,
+		anchorInput:  anchorInput,
+		spinner:      sp,
 		selectedSide: "RIGHT",
 	}
 }
@@ -155,16 +157,17 @@ func (m CommentModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == "enter" {
 				line, err := parseLineNumber(m.lineInput.Value())
 				if err != nil || line < 1 {
-					// show inline error — just stay on step
+					m.lineErr = "invalid line number"
 					return m, nil
 				}
+				m.lineErr = ""
 				m.selectedLine = line
 				m.step = stepBody
 				m.bodyInput.Focus()
 				return m, textarea.Blink
 			}
 		case stepBody:
-			if msg.String() == "tab" && !msg.Alt {
+			if msg.String() == "ctrl+d" {
 				body := strings.TrimSpace(m.bodyInput.Value())
 				if body == "" {
 					return m, nil
@@ -191,13 +194,17 @@ func (m CommentModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.spinner.Tick,
 					func() tea.Msg {
 						posted, err := github.PostReviewComment(
-							ref, pr.HeadSHA, path, body, side, line,
+							github.GetClient(), context.Background(), ref, pr.HeadSHA, path, body, side, line,
 						)
 						return postDoneMsg{result: posted, err: err}
 					},
 				)
 			}
 		}
+
+	case tea.WindowSizeMsg:
+		m.fileList.SetSize(msg.Width, msg.Height-4)
+		return m, nil
 
 	case postDoneMsg:
 		m.posting = false
@@ -267,12 +274,15 @@ func (m CommentModel) View() string {
 
 	case stepLine:
 		sb.WriteString("  " + prompt.Render("Line number:") + "  " + m.lineInput.View() + "\n")
+		if m.lineErr != "" {
+			sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#ef4444")).Render(m.lineErr))
+		}
 		sb.WriteString("\n  " + dim.Render("press enter to continue, esc to go back"))
 
 	case stepBody:
 		sb.WriteString("  " + prompt.Render("Comment:") + "\n\n")
 		sb.WriteString(m.bodyInput.View())
-		sb.WriteString("\n\n  " + dim.Render("press tab to continue, esc to go back"))
+		sb.WriteString("\n\n  " + dim.Render("press ctrl+d to continue, esc to go back"))
 
 	case stepAnchor:
 		sb.WriteString("  " + prompt.Render("Anchor tag") + " " + dim.Render("(optional, e.g. perf):") + "  " + m.anchorInput.View() + "\n")
@@ -289,6 +299,8 @@ func (m CommentModel) View() string {
 		}
 		if tag := strings.TrimPrefix(strings.TrimSpace(m.anchorInput.Value()), "#"); tag != "" {
 			sb.WriteString("  " + dim.Render("anchor:") + "  " + green.Render("#"+tag) + "\n")
+		} else {
+			sb.WriteString("  " + dim.Render("anchor:") + "  " + dim.Render("(none)") + "\n")
 		}
 		sb.WriteString("\n  " + prompt.Render("press enter to post, esc to go back"))
 
@@ -326,4 +338,3 @@ func parseLineNumber(s string) (int, error) {
 	_, err := fmt.Sscanf(s, "%d", &n)
 	return n, err
 }
-

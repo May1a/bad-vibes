@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -33,7 +34,7 @@ query FetchPR($owner: String!, $repo: String!, $number: Int!) {
 `
 
 // FetchPR retrieves PR metadata via GraphQL.
-func FetchPR(ref model.PRRef) (model.PR, []string, error) {
+func FetchPR(client *Client, ctx context.Context, ref model.PRRef) (model.PR, []string, error) {
 	var data struct {
 		Repository struct {
 			PullRequest struct {
@@ -63,7 +64,7 @@ func FetchPR(ref model.PRRef) (model.PR, []string, error) {
 		} `json:"repository"`
 	}
 
-	err := graphql(fetchPRQuery, map[string]any{
+	err := client.graphql(ctx, fetchPRQuery, map[string]any{
 		"owner":  ref.Owner,
 		"repo":   ref.Repo,
 		"number": ref.Number,
@@ -100,10 +101,10 @@ func FetchPR(ref model.PRRef) (model.PR, []string, error) {
 }
 
 // FetchDiff retrieves the unified diff for a PR via REST.
-func FetchDiff(ref model.PRRef) (string, error) {
+func FetchDiff(client *Client, ctx context.Context, ref model.PRRef) (string, error) {
 	var raw string
 	path := fmt.Sprintf("/repos/%s/%s/pulls/%d", ref.Owner, ref.Repo, ref.Number)
-	err := rest("GET", path, nil, &raw, map[string]string{
+	err := client.rest(ctx, "GET", path, nil, &raw, map[string]string{
 		"Accept": "application/vnd.github.diff",
 	})
 	if err != nil {

@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -39,13 +40,13 @@ query FetchThreads($owner: String!, $repo: String!, $number: Int!, $after: Strin
 `
 
 // FetchReviewThreads fetches all review threads for a PR, paginated.
-func FetchReviewThreads(ref model.PRRef) ([]model.ReviewThread, error) {
+func FetchReviewThreads(client *Client, ctx context.Context, ref model.PRRef) ([]model.ReviewThread, error) {
 	type gqlComment struct {
-		ID       string `json:"id"`
-		Body     string `json:"body"`
-		DiffHunk string `json:"diffHunk"`
+		ID        string `json:"id"`
+		Body      string `json:"body"`
+		DiffHunk  string `json:"diffHunk"`
 		CreatedAt string `json:"createdAt"`
-		Author   struct {
+		Author    struct {
 			Login string `json:"login"`
 		} `json:"author"`
 	}
@@ -90,7 +91,7 @@ func FetchReviewThreads(ref model.PRRef) ([]model.ReviewThread, error) {
 		}
 
 		var data gqlData
-		if err := graphql(fetchThreadsQuery, vars, &data); err != nil {
+		if err := client.graphql(ctx, fetchThreadsQuery, vars, &data); err != nil {
 			return nil, fmt.Errorf("fetching threads for PR #%d: %w", ref.Number, err)
 		}
 
@@ -133,28 +134,71 @@ func FetchReviewThreads(ref model.PRRef) ([]model.ReviewThread, error) {
 	return allThreads, nil
 }
 
-// FindUnresolvedThreadAt returns the GraphQL node ID of the first unresolved
-// thread at the given file path and line number. Returns ("", false, nil) when
-// no match is found. Pass path="" to match PR-level threads (subjectType "PR").
-func FindUnresolvedThreadAt(ref model.PRRef, path string, line int) (string, bool, error) {
-	threads, err := FetchReviewThreads(ref)
+// FindUnresolvedThreadAt returns the GraphQL node ID of the unresolved thread at
+// the given file path and line number. Returns ("", false, nil) when no match is
+// found. Pass body to disambiguate multiple unresolved threads on the same line.
+// Pass path="" to match the first unresolved PR-level thread.
+func FindUnresolvedThreadAt(client *Client, ctx context.Context, ref model.PRRef, path string, line int, body string) (string, bool, error) {
+	threads, err := FetchReviewThreads(client, ctx, ref)
 	if err != nil {
 		return "", false, err
 	}
+	return findUnresolvedThreadID(threads, path, line, body)
+}
+
+func findUnresolvedThreadID(threads []model.ReviewThread, path string, line int, body string) (string, bool, error) {
+	var matches []model.ReviewThread
+
 	for _, t := range threads {
 		if t.IsResolved {
 			continue
 		}
 		if path == "" {
-			// PR-level thread
-			if t.SubjectType == "PR" || t.Path == "" {
+			if t.Path == "" {
 				return t.ID, true, nil
 			}
-		} else if t.Path == path && t.Line == line {
-			return t.ID, true, nil
+			continue
+		}
+		if t.Path == path && t.Line == line {
+			matches = append(matches, t)
 		}
 	}
-	return "", false, nil
+
+	if len(matches) == 0 {
+		return "", false, nil
+	}
+
+	if body != "" {
+		var bodyMatches []model.ReviewThread
+		for _, t := range matches {
+			if threadHasCommentBody(t, body) {
+				bodyMatches = append(bodyMatches, t)
+			}
+		}
+		switch len(bodyMatches) {
+		case 0:
+			return "", false, nil
+		case 1:
+			return bodyMatches[0].ID, true, nil
+		default:
+			return "", false, fmt.Errorf("multiple unresolved threads match %s:%d with the same body", path, line)
+		}
+	}
+
+	if len(matches) > 1 {
+		return "", false, fmt.Errorf("multiple unresolved threads match %s:%d; body required to disambiguate", path, line)
+	}
+
+	return matches[0].ID, true, nil
+}
+
+func threadHasCommentBody(thread model.ReviewThread, body string) bool {
+	for _, c := range thread.Comments {
+		if c.Body == body {
+			return true
+		}
+	}
+	return false
 }
 
 const resolveThreadMutation = `
@@ -169,7 +213,7 @@ mutation ResolveThread($threadId: ID!) {
 `
 
 // ResolveThread marks a review thread as resolved.
-func ResolveThread(threadID string) error {
+func ResolveThread(client *Client, ctx context.Context, threadID string) error {
 	var data struct {
 		ResolveReviewThread struct {
 			Thread struct {
@@ -178,7 +222,7 @@ func ResolveThread(threadID string) error {
 			} `json:"thread"`
 		} `json:"resolveReviewThread"`
 	}
-	if err := graphql(resolveThreadMutation, map[string]any{
+	if err := client.graphql(ctx, resolveThreadMutation, map[string]any{
 		"threadId": threadID,
 	}, &data); err != nil {
 		return fmt.Errorf("resolving thread %s: %w", threadID, err)

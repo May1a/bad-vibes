@@ -13,16 +13,24 @@ import (
 )
 
 var commentCmd = &cobra.Command{
-	Use:   "comment <PR>",
+	Use:   "comment [PR]",
 	Short: "Leave an inline review comment",
-	Args:  cobra.MaximumNArgs(1),
+	Long: `Interactive wizard to leave an inline review comment.
+
+Walks through: select file → enter line number → write comment → optionally tag with anchor → confirm.
+
+Examples:
+  bv comment      # auto-detect PR from current branch
+  bv comment 42   # comment on PR #42`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		ref, err := resolvePR(args)
 		if err != nil {
 			return err
 		}
 
-		pr, files, err := github.FetchPR(ref)
+		pr, files, err := github.FetchPR(ghClient, ctx, ref)
 		if err != nil {
 			return err
 		}
@@ -51,9 +59,15 @@ var commentCmd = &cobra.Command{
 		// Store anchor if the user tagged one
 		if result.AnchorTag != "" {
 			// Re-fetch threads to get the real GraphQL node ID for the new thread.
-			// The REST review endpoint doesn't return it, but the thread is visible
-			// immediately via GraphQL after posting.
-			threadNodeID, _, _ := github.FindUnresolvedThreadAt(ref, result.Path, result.Line)
+			threadNodeID, ok, err := github.FindUnresolvedThreadAt(ghClient, ctx, ref, result.Path, result.Line, result.Body)
+			if err != nil {
+				fmt.Println(lipgloss.NewStyle().Faint(true).Render("(anchor not saved: " + err.Error() + ")"))
+				return nil
+			}
+			if !ok {
+				fmt.Println(lipgloss.NewStyle().Faint(true).Render("(anchor not saved: could not resolve posted thread ID)"))
+				return nil
+			}
 			anchor := model.Anchor{
 				Tag:      result.AnchorTag,
 				Path:     result.Path,

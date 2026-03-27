@@ -1,5 +1,5 @@
 ---
-name: bv (bad-vibes)
+name: bv
 description: This skill should be used when the user asks to "use bv", "review a PR with bv", "post a comment with bv", "show comments with bv", "resolve a thread with bv", "list PRs with bv", "show unresolved comments", "use bad-vibes", "create an anchor", "resolve by anchor", or asks how any `bv` command works.
 version: 0.2.0
 ---

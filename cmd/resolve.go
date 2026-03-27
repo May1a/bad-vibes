@@ -77,6 +77,12 @@ Examples:
 					if err != nil {
 						return err
 					}
+					if !ok && anchor.Body != "" {
+						id, ok, err = github.FindUnresolvedThreadAt(ghClient, ctx, ref, anchor.Path, anchor.Line, "")
+						if err != nil {
+							return err
+						}
+					}
 					if ok {
 						threadID = id
 					} else if anchor.ThreadID != "" {

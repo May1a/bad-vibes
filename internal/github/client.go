@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -17,10 +19,10 @@ const (
 	graphqlEndpoint = "https://api.github.com/graphql"
 
 	// Retry configuration
-	maxRetries      = 3
-	initialBackoff  = 250 * time.Millisecond
-	maxBackoff      = 5 * time.Second
-	defaultTimeout  = 30 * time.Second
+	maxRetries     = 3
+	initialBackoff = 250 * time.Millisecond
+	maxBackoff     = 5 * time.Second
+	defaultTimeout = 30 * time.Second
 
 	// Rate limit headers
 	headerRateLimit     = "X-RateLimit-Limit"
@@ -123,6 +125,25 @@ type APIError struct {
 	RateLimit  *RateLimitInfo
 }
 
+// RateLimitError wraps APIError so callers can match both ErrRateLimited and APIError.
+type RateLimitError struct {
+	APIError *APIError
+}
+
+func (e *RateLimitError) Error() string {
+	if e.APIError == nil {
+		return ErrRateLimited.Error()
+	}
+	return ErrRateLimited.Error() + ": " + e.APIError.Error()
+}
+
+func (e *RateLimitError) Unwrap() []error {
+	if e.APIError == nil {
+		return []error{ErrRateLimited}
+	}
+	return []error{ErrRateLimited, e.APIError}
+}
+
 func (e *APIError) Error() string {
 	msg := fmt.Sprintf("GitHub API %s %s returned %d", e.Method, e.Path, e.StatusCode)
 	if e.Message != "" {
@@ -164,10 +185,14 @@ func (c *Client) graphql(ctx context.Context, query string, variables map[string
 
 		lastErr = err
 
-		// Check if error is retryable
+		if errors.Is(err, ErrRateLimited) {
+			continue
+		}
+
+		// Check if error is retryable.
 		var apiErr *APIError
 		if errors.As(err, &apiErr) {
-			if apiErr.StatusCode == 429 || apiErr.StatusCode >= 500 {
+			if apiErr.StatusCode >= 500 {
 				continue // Retry
 			}
 		}
@@ -212,8 +237,8 @@ func (c *Client) doGraphQL(ctx context.Context, body []byte, v any) error {
 			Message:    string(raw),
 			RateLimit:  rateLimit,
 		}
-		if resp.StatusCode == 429 {
-			return fmt.Errorf("%w: %v", ErrRateLimited, apiErr)
+		if isRateLimitedResponse(resp, raw) {
+			return &RateLimitError{APIError: apiErr}
 		}
 		return apiErr
 	}
@@ -240,13 +265,13 @@ func (c *Client) doGraphQL(ctx context.Context, body []byte, v any) error {
 // extraHeaders is optional additional HTTP headers.
 // If v is a *string, the raw response body is written to it (useful for diff).
 func (c *Client) rest(ctx context.Context, method, path string, body any, v any, extraHeaders map[string]string) error {
-	var bodyReader io.Reader
+	var bodyBytes []byte
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("marshaling request body: %w", err)
 		}
-		bodyReader = bytes.NewReader(b)
+		bodyBytes = b
 	}
 
 	var lastErr error
@@ -260,6 +285,11 @@ func (c *Client) rest(ctx context.Context, method, path string, body any, v any,
 			}
 		}
 
+		var bodyReader io.Reader
+		if bodyBytes != nil {
+			bodyReader = bytes.NewReader(bodyBytes)
+		}
+
 		err := c.doREST(ctx, method, path, bodyReader, v, extraHeaders)
 		if err == nil {
 			return nil
@@ -267,10 +297,14 @@ func (c *Client) rest(ctx context.Context, method, path string, body any, v any,
 
 		lastErr = err
 
-		// Check if error is retryable
+		if errors.Is(err, ErrRateLimited) {
+			continue
+		}
+
+		// Check if error is retryable.
 		var apiErr *APIError
 		if errors.As(err, &apiErr) {
-			if apiErr.StatusCode == 429 || apiErr.StatusCode >= 500 {
+			if apiErr.StatusCode >= 500 {
 				continue // Retry
 			}
 		}
@@ -322,8 +356,8 @@ func (c *Client) doREST(ctx context.Context, method, path string, bodyReader io.
 			Message:    string(raw),
 			RateLimit:  rateLimit,
 		}
-		if resp.StatusCode == 429 {
-			return fmt.Errorf("%w: %v", ErrRateLimited, apiErr)
+		if isRateLimitedResponse(resp, raw) {
+			return &RateLimitError{APIError: apiErr}
 		}
 		return apiErr
 	}
@@ -344,12 +378,38 @@ func calculateBackoff(attempt int) time.Duration {
 	if backoff > maxBackoff {
 		backoff = maxBackoff
 	}
-	// Add jitter (±10%)
-	jitter := time.Duration(float64(backoff) * 0.1)
+
+	// Add symmetric jitter (±10%) to avoid synchronized retries.
+	jitter := backoff / 10
 	if jitter > 0 {
-		backoff += time.Duration(int64(jitter) * (int64(attempt) % 2 * 2 - 1))
+		delta := rand.Int64N(int64(jitter)*2+1) - int64(jitter)
+		backoff += time.Duration(delta)
+		if backoff < 0 {
+			backoff = 0
+		}
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
 	}
 	return backoff
+}
+
+func isRateLimitedResponse(resp *http.Response, raw []byte) bool {
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return true
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		return false
+	}
+	if resp.Header.Get(headerRetryAfter) != "" {
+		return true
+	}
+	if resp.Header.Get(headerRateRemaining) == "0" {
+		return true
+	}
+
+	msg := strings.ToLower(string(raw))
+	return strings.Contains(msg, "rate limit")
 }
 
 // extractRateLimit extracts rate limit information from response headers.

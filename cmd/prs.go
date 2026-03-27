@@ -95,8 +95,9 @@ Examples:
 			branchCol := cyan.Render(pr.HeadRefName)
 			author := dim.Render("@" + pr.Author)
 			title := pr.Title
-			if len(title) > 55 {
-				title = title[:54] + "…"
+			runes := []rune(title)
+			if len(runes) > 55 {
+				title = string(runes[:54]) + "…"
 			}
 
 			fmt.Printf("  %s  %s  %-55s  %s  %s\n",

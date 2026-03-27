@@ -2,12 +2,12 @@
 
 A focused CLI for human-in-the-loop AI PR review.
 
-`gh` dumps too much noise. `bv` surfaces only what matters: unresolved review threads, with tight interactive flows for commenting and resolving — nothing else.
+`gh` dumps too much noise. `bv` surfaces only what matters: unresolved review threads, direct commenting, and fast resolution flows — nothing else.
 
 ## Features
 
 - 🎯 **Focused** - Only unresolved threads, no noise
-- 🎨 **Beautiful TUI** - Interactive wizards for commenting and resolving
+- 🧰 **Direct CLI** - Scriptable commenting plus fast thread resolution
 - ⚡ **Fast** - Retry logic, rate limit handling, and caching
 - 🔗 **Anchors** - Named bookmarks for important threads
 - 🛡️ **Robust** - Comprehensive error handling and timeout support
@@ -107,22 +107,22 @@ Show only **unresolved** review threads. Resolved ones are silently absent.
 ```
 bv comments
 bv comments 42
+bv comments --verbose --patch
 ```
 
-Each thread shows file, line, author, timestamp, body, and diff hunk context. PR-level threads (no file) are shown as "PR-level comment". Anchor tags are highlighted in the thread body.
+By default `bv comments` prints a compact summary for each thread. Use `--verbose` to show every comment in the thread and `--patch` to include the diff hunk context. PR-level threads (no file) are shown as "PR-level comment".
 
 ### `bv comment [PR]`
 
-Interactive TUI wizard to post an inline review comment.
+Post an inline review comment directly from the CLI.
 
 ```
-bv comment
-bv comment 42
+bv comment --file cmd/root.go --line 42 --body "Needs a guard here"
+bv comment 42 --file cmd/root.go --line 42 --body-file ./comment.md --anchor perf
+printf 'Needs a guard here\n' | bv comment --file cmd/root.go --line 42
 ```
 
-Steps: pick a file → enter line number → write your comment → optionally tag it with an anchor → confirm.
-
-On confirm the comment is posted via the GitHub API. If you set an anchor tag, `bv` immediately re-fetches the thread list to capture the real thread ID and saves the anchor locally.
+Required inputs: `--file`, `--line`, and a body via `--body`, `--body-file`, or stdin. If you set `--anchor`, `bv` re-fetches the thread list after posting to capture the live thread ID and saves the anchor locally.
 
 ### `bv resolve [PR]`
 
@@ -159,7 +159,7 @@ bv anchors 42
 Anchors are named bookmarks for review threads. Tag a comment during `bv comment` and you can reference it later by name:
 
 ```sh
-bv comment          # tag your comment #perf during the wizard
+bv comment --file cmd/root.go --line 42 --body "Needs work" --anchor perf
 bv resolve --id #perf   # resolve that thread by name
 ```
 

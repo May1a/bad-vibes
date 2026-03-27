@@ -15,10 +15,10 @@ import (
 )
 
 var (
-	bvVersion    string
-	detectedRepo string // "owner/repo" from git remote origin
+	bvVersion      string
+	detectedRepo   string // "owner/repo" from git remote origin
 	detectedBranch string // current git branch
-	ghClient     *github.Client
+	ghClient       *github.Client
 )
 
 // SetVersion is called from main.go with the ldflags-injected version string.
@@ -40,9 +40,13 @@ var rootCmd = &cobra.Command{
 	Long: `bad vibes cuts through the noise of PR review.
 
 Surface only unresolved comments, post pointed feedback, and resolve
-threads — without the garbage that gh dumps by default.`,
+	threads — without the garbage that gh dumps by default.`,
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if !requiresRepoContext(cmd) {
+			return nil
+		}
+
 		// Detect repo from git remote
 		repo, err := git.RemoteRepo()
 		if err != nil {
@@ -71,6 +75,16 @@ threads — without the garbage that gh dumps by default.`,
 		github.SetClient(ghClient)
 		return nil
 	},
+}
+
+func requiresRepoContext(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "review", "comments", "comment", "resolve", "summary", "anchors", "prs":
+			return true
+		}
+	}
+	return false
 }
 
 func init() {

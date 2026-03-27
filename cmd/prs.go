@@ -26,6 +26,9 @@ Use --closed to see closed and merged PRs instead.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		base := repoRef()
+		if base.Owner == "" || base.Repo == "" {
+			return fmt.Errorf("could not detect repository from git remote; ensure you're in a git repo with a GitHub remote")
+		}
 		states := github.StatesFromFlags(prsClosed)
 
 		branch := detectedBranch

@@ -50,15 +50,17 @@ var commentCmd = &cobra.Command{
 
 		// Store anchor if the user tagged one
 		if result.AnchorTag != "" {
+			// Re-fetch threads to get the real GraphQL node ID for the new thread.
+			// The REST review endpoint doesn't return it, but the thread is visible
+			// immediately via GraphQL after posting.
+			threadNodeID, _, _ := github.FindUnresolvedThreadAt(ref, result.Path, result.Line)
 			anchor := model.Anchor{
-				Tag:     result.AnchorTag,
-				Path:    result.Path,
-				Line:    result.Line,
-				Body:    result.Body,
-				Created: time.Now(),
-				// ThreadID is not returned by the REST review endpoint directly;
-				// use the review ID as a reference until a future fetch can link it.
-				ThreadID: fmt.Sprintf("review:%d", result.Posted.ReviewID),
+				Tag:      result.AnchorTag,
+				Path:     result.Path,
+				Line:     result.Line,
+				Body:     result.Body,
+				Created:  time.Now(),
+				ThreadID: threadNodeID, // real GraphQL node ID (empty only if lookup fails)
 			}
 			if err := cache.AddAnchor(ref, anchor); err != nil {
 				fmt.Println(lipgloss.NewStyle().Faint(true).Render("(anchor not saved: " + err.Error() + ")"))

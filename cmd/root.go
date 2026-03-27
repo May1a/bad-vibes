@@ -46,6 +46,9 @@ threads — without the garbage that gh dumps by default.`,
 		if err != nil {
 			return err
 		}
+		if !strings.Contains(repo, "/") {
+			return fmt.Errorf("invalid repo format from git remote: %q (expected owner/repo)", repo)
+		}
 		detectedRepo = repo
 
 		// Detect current branch

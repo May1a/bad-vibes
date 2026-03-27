@@ -36,6 +36,12 @@ make build     # produces ./bv
 make build-all # outputs to dist/
 ```
 
+**As a `skills.sh` skill:**
+
+```sh
+npx skills add https://github.com/May1a/bad-vibes --skill bv
+```
+
 ---
 
 ## Auth

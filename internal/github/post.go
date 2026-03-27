@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/may/bad-vibes/internal/model"
@@ -14,7 +15,7 @@ type PostedComment struct {
 }
 
 // PostReviewComment submits a single inline review comment via REST.
-func PostReviewComment(ref model.PRRef, headSHA, path, body, side string, line int) (PostedComment, error) {
+func PostReviewComment(client *Client, ctx context.Context, ref model.PRRef, headSHA, path, body, side string, line int) (PostedComment, error) {
 	type commentPayload struct {
 		Path string `json:"path"`
 		Line int    `json:"line"`
@@ -41,7 +42,7 @@ func PostReviewComment(ref model.PRRef, headSHA, path, body, side string, line i
 	}
 
 	apiPath := fmt.Sprintf("/repos/%s/%s/pulls/%d/reviews", ref.Owner, ref.Repo, ref.Number)
-	if err := rest("POST", apiPath, payload, &result, nil); err != nil {
+	if err := client.rest(ctx, "POST", apiPath, payload, &result, nil); err != nil {
 		return PostedComment{}, fmt.Errorf("posting review comment: %w", err)
 	}
 

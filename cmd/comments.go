@@ -11,16 +11,32 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	commentsVerbose bool
+	commentsPatch   bool
+)
+
 var commentsCmd = &cobra.Command{
-	Use:   "comments <PR>",
+	Use:   "comments [PR]",
 	Short: "Show unresolved review comments",
-	Args:  cobra.MaximumNArgs(1),
+	Long: `Show unresolved review threads in a compact, readable form.
+
+By default this prints a short summary for each unresolved thread.
+Use --verbose to show every comment in the thread.
+Use --patch to include diff hunk context.
+
+Examples:
+  bv comments      # auto-detect PR from current branch
+  bv comments 42   # show comments for PR #42
+  bv comments --verbose --patch`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		ref, err := resolvePR(args)
 		if err != nil {
 			return err
 		}
-		threads, err := github.FetchReviewThreads(ref)
+		threads, err := github.FetchReviewThreads(ghClient, ctx, ref)
 		if err != nil {
 			return err
 		}
@@ -38,7 +54,15 @@ var commentsCmd = &cobra.Command{
 		}
 
 		anchors, _ := cache.ListAnchors(ref)
-		display.PrintThreads(unresolved, anchors)
+		display.PrintThreads(unresolved, anchors, display.ThreadRenderOptions{
+			Verbose:  commentsVerbose,
+			ShowDiff: commentsPatch,
+		})
 		return nil
 	},
+}
+
+func init() {
+	commentsCmd.Flags().BoolVar(&commentsVerbose, "verbose", false, "Show every comment in each thread")
+	commentsCmd.Flags().BoolVar(&commentsPatch, "patch", false, "Include diff hunk context")
 }

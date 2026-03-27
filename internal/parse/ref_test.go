@@ -45,6 +45,22 @@ func TestParseRef(t *testing.T) {
 			raw:     "not-a-pr",
 			wantErr: true,
 		},
+		{
+			name:        "whitespace trimmed",
+			raw:         "  42  ",
+			defaultRepo: "owner/repo",
+			want:        model.PRRef{Owner: "owner", Repo: "repo", Number: 42},
+		},
+		{
+			name: "owner with dots and dashes",
+			raw:  "my-org/my.repo#123",
+			want: model.PRRef{Owner: "my-org", Repo: "my.repo", Number: 123},
+		},
+		{
+			name: "URL with trailing content",
+			raw:  "https://github.com/owner/repo/pull/42/files",
+			want: model.PRRef{Owner: "owner", Repo: "repo", Number: 42},
+		},
 	}
 
 	for _, tt := range tests {

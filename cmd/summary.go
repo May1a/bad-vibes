@@ -10,20 +10,26 @@ import (
 )
 
 var summaryCmd = &cobra.Command{
-	Use:   "summary <PR>",
+	Use:   "summary [PR]",
 	Short: "Show a tidy PR overview",
-	Args:  cobra.MaximumNArgs(1),
+	Long: `Show a tidy PR overview including title, author, state, diff stats, and unresolved thread count.
+
+Examples:
+  bv summary       # auto-detect PR from current branch
+  bv summary 42    # show PR #42`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		ref, err := resolvePR(args)
 		if err != nil {
 			return err
 		}
 
-		pr, files, err := github.FetchPR(ref)
+		pr, files, err := github.FetchPR(ghClient, ctx, ref)
 		if err != nil {
 			return err
 		}
-		threads, err := github.FetchReviewThreads(ref)
+		threads, err := github.FetchReviewThreads(ghClient, ctx, ref)
 		if err != nil {
 			return err
 		}

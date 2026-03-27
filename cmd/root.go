@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -14,9 +15,10 @@ import (
 )
 
 var (
-	bvVersion     string
+	bvVersion      string
 	detectedRepo   string // "owner/repo" from git remote origin
 	detectedBranch string // current git branch
+	ghClient       *github.Client
 )
 
 // SetVersion is called from main.go with the ldflags-injected version string.
@@ -38,9 +40,13 @@ var rootCmd = &cobra.Command{
 	Long: `bad vibes cuts through the noise of PR review.
 
 Surface only unresolved comments, post pointed feedback, and resolve
-threads — without the garbage that gh dumps by default.`,
+	threads — without the garbage that gh dumps by default.`,
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if !requiresRepoContext(cmd) {
+			return nil
+		}
+
 		// Detect repo from git remote
 		repo, err := git.RemoteRepo()
 		if err != nil {
@@ -63,9 +69,22 @@ threads — without the garbage that gh dumps by default.`,
 		if err != nil {
 			return err
 		}
-		github.SetToken(token)
+
+		// Initialize GitHub client with retry logic and rate limit handling
+		ghClient = github.NewClient(token)
+		github.SetClient(ghClient)
 		return nil
 	},
+}
+
+func requiresRepoContext(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "review", "comments", "comment", "resolve", "summary", "anchors", "prs":
+			return true
+		}
+	}
+	return false
 }
 
 func init() {
@@ -97,10 +116,10 @@ func resolvePR(args []string) (model.PRRef, error) {
 	}
 	// No arg: find latest open PR on current branch
 	base := repoRef()
-	pr, err := github.LatestOpenPR(base, detectedBranch)
+	pr, err := github.LatestOpenPR(ghClient, context.Background(), base, detectedBranch)
 	if err != nil {
 		return model.PRRef{}, err
 	}
-	fmt.Printf("  → PR #%d: %s\n\n", pr.Number, pr.Title)
+	fmt.Fprintf(os.Stderr, "  → PR #%d: %s\n\n", pr.Number, pr.Title)
 	return model.PRRef{Owner: base.Owner, Repo: base.Repo, Number: pr.Number}, nil
 }

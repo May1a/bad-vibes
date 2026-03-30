@@ -12,7 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var resolveID string
+var (
+	resolveID        string
+	resolveTargetCfg targetFlags
+)
 
 var resolveCmd = &cobra.Command{
 	Use:   "resolve [PR]",
@@ -22,18 +25,23 @@ var resolveCmd = &cobra.Command{
 Without --id: launches an interactive list of unresolved threads.
 With --id: resolves the given thread ID (GraphQL node ID or #anchor-tag) directly.
 
+Targeting:
+  Prefer --repo/--pr in scripts or outside a checkout.
+  If omitted, bv uses the current repo and the latest open PR on the current branch.
+
 Examples:
-  bv resolve                    # interactive mode
-  bv resolve --id PRRT_abc123   # resolve by GraphQL node ID
-  bv resolve --id #perf         # resolve by anchor tag
-  bv resolve --id #PR           # resolve first unresolved PR-level thread`,
+  bv resolve --repo owner/repo --pr 42 --id PRRT_abc123
+  bv resolve --pr 42 --id #perf
+  bv resolve 42 --id #PR        # positional shorthand
+  bv resolve                    # auto-detect interactive mode`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		ref, err := resolvePR(args)
+		target, err := resolveTarget(cmd, resolveTargetCfg, args)
 		if err != nil {
 			return err
 		}
+		ref := target.Ref
 
 		green := lipgloss.NewStyle().Foreground(lipgloss.Color("#22c55e"))
 		dim := lipgloss.NewStyle().Faint(true)
@@ -137,5 +145,6 @@ Examples:
 }
 
 func init() {
+	addTargetFlags(resolveCmd, &resolveTargetCfg)
 	resolveCmd.Flags().StringVar(&resolveID, "id", "", "Thread ID (GraphQL node ID or #anchor-tag) to resolve without TUI")
 }

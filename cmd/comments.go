@@ -14,6 +14,7 @@ import (
 var (
 	commentsVerbose bool
 	commentsPatch   bool
+	commentsTarget  targetFlags
 )
 
 var commentsCmd = &cobra.Command{
@@ -25,17 +26,24 @@ By default this prints a short summary for each unresolved thread.
 Use --verbose to show every comment in the thread.
 Use --patch to include diff hunk context.
 
+Targeting:
+  Prefer --repo/--pr in scripts or outside a checkout.
+  If omitted, bv uses the current repo and the latest open PR on the current branch.
+
 Examples:
-  bv comments      # auto-detect PR from current branch
-  bv comments 42   # show comments for PR #42
+  bv comments --repo owner/repo --pr 42
+  bv comments --pr 42
+  bv comments 42   # positional shorthand
+  bv comments      # auto-detect from current branch
   bv comments --verbose --patch`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		ref, err := resolvePR(args)
+		target, err := resolveTarget(cmd, commentsTarget, args)
 		if err != nil {
 			return err
 		}
+		ref := target.Ref
 		threads, err := github.FetchReviewThreads(ghClient, ctx, ref)
 		if err != nil {
 			return err
@@ -63,6 +71,7 @@ Examples:
 }
 
 func init() {
+	addTargetFlags(commentsCmd, &commentsTarget)
 	commentsCmd.Flags().BoolVar(&commentsVerbose, "verbose", false, "Show every comment in each thread")
 	commentsCmd.Flags().BoolVar(&commentsPatch, "patch", false, "Include diff hunk context")
 }

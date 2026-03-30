@@ -9,15 +9,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var anchorsTarget targetFlags
+
 var anchorsCmd = &cobra.Command{
 	Use:   "anchors [PR]",
 	Short: "List local anchors for a PR",
-	Args:  cobra.MaximumNArgs(1),
+	Long: `List local anchors for a pull request.
+
+Targeting:
+  Prefer --repo/--pr in scripts or outside a checkout.
+  If omitted, bv uses the current repo and the latest open PR on the current branch.
+
+Examples:
+  bv anchors --repo owner/repo --pr 42
+  bv anchors --pr 42
+  bv anchors 42   # positional shorthand
+  bv anchors`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ref, err := resolvePR(args)
+		target, err := resolveTarget(cmd, anchorsTarget, args)
 		if err != nil {
 			return err
 		}
+		ref := target.Ref
 		anchors, err := cache.ListAnchors(ref)
 		if err != nil {
 			return err
@@ -52,4 +66,8 @@ var anchorsCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+func init() {
+	addTargetFlags(anchorsCmd, &anchorsTarget)
 }

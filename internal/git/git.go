@@ -3,6 +3,7 @@ package git
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -34,4 +35,17 @@ func CurrentBranch() (string, error) {
 		return "", fmt.Errorf("not on a branch (detached HEAD?)")
 	}
 	return branch, nil
+}
+
+// RepoRoot returns the absolute path to the current git repository root.
+func RepoRoot() (string, error) {
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", fmt.Errorf("could not determine git repository root")
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		return "", fmt.Errorf("could not determine git repository root")
+	}
+	return filepath.Clean(root), nil
 }

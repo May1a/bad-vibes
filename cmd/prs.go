@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/may/bad-vibes/internal/git"
 	"github.com/may/bad-vibes/internal/github"
+	"github.com/may/bad-vibes/internal/model"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +34,12 @@ Examples:
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		base := repoRef()
+		repo, err := git.RemoteRepo()
+		if err != nil {
+			return fmt.Errorf("could not resolve target repository\n  why: %v\n  try: bv prs from inside a GitHub checkout", err)
+		}
+		parts := strings.SplitN(repo, "/", 2)
+		base := model.PRRef{Owner: parts[0], Repo: parts[1]}
 		if base.Owner == "" || base.Repo == "" {
 			return fmt.Errorf("could not detect repository from git remote; ensure you're in a git repo with a GitHub remote")
 		}
@@ -41,7 +48,10 @@ Examples:
 			return fmt.Errorf("--all-branches and --branch are mutually exclusive")
 		}
 
-		branch := detectedBranch
+		branch, err := git.CurrentBranch()
+		if err != nil && !prsAllBranches && prsBranch == "" {
+			return fmt.Errorf("could not resolve target branch\n  why: %v\n  try: bv prs --all-branches", err)
+		}
 		if prsAllBranches {
 			branch = ""
 		} else if prsBranch != "" {

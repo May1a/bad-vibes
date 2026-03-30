@@ -9,21 +9,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var summaryTarget targetFlags
+
 var summaryCmd = &cobra.Command{
 	Use:   "summary [PR]",
 	Short: "Show a tidy PR overview",
 	Long: `Show a tidy PR overview including title, author, state, diff stats, and unresolved thread count.
 
+Targeting:
+  Prefer --repo/--pr in scripts or outside a checkout.
+  If omitted, bv uses the current repo and the latest open PR on the current branch.
+
 Examples:
-  bv summary       # auto-detect PR from current branch
-  bv summary 42    # show PR #42`,
+  bv summary --repo owner/repo --pr 42
+  bv summary --pr 42
+  bv summary 42    # positional shorthand
+  bv summary       # auto-detect from current branch`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		ref, err := resolvePR(args)
+		target, err := resolveTarget(cmd, summaryTarget, args)
 		if err != nil {
 			return err
 		}
+		ref := target.Ref
 
 		pr, files, err := github.FetchPR(ghClient, ctx, ref)
 		if err != nil {
@@ -87,4 +96,8 @@ Examples:
 		fmt.Println(dim.Render(pr.URL))
 		return nil
 	},
+}
+
+func init() {
+	addTargetFlags(summaryCmd, &summaryTarget)
 }

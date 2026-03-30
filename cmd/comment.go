@@ -10,6 +10,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/may/bad-vibes/internal/cache"
+	"github.com/may/bad-vibes/internal/diff"
+	"github.com/may/bad-vibes/internal/git"
 	"github.com/may/bad-vibes/internal/github"
 	"github.com/may/bad-vibes/internal/model"
 	"github.com/spf13/cobra"
@@ -22,6 +24,15 @@ var (
 	commentBodyFile string
 	commentAnchor   string
 	commentSide     string
+	commentDryRun   bool
+	commentTarget   targetFlags
+)
+
+var (
+	fetchPRForComment        = github.FetchPR
+	fetchDiffForComment      = github.FetchDiff
+	postReviewComment        = github.PostReviewComment
+	findUnresolvedThreadByAt = github.FindUnresolvedThreadAt
 )
 
 var commentCmd = &cobra.Command{
@@ -32,23 +43,29 @@ var commentCmd = &cobra.Command{
 Required flags:
   --file PATH
   --line N
-  --body TEXT   (or pipe stdin / use --body-file)
+  body from --body TEXT, --body-file FILE, or stdin
+
+Targeting:
+  Prefer --repo/--pr in scripts or outside a checkout.
+  If omitted, bv uses the current repo and the latest open PR on the current branch.
 
 Examples:
-  bv comment --file cmd/root.go --line 42 --body "Needs a guard here"
-  bv comment 42 --file cmd/root.go --line 42 --body-file ./comment.md --anchor perf
-  printf 'Needs a guard here\n' | bv comment --file cmd/root.go --line 42`,
+  bv comment --repo owner/repo --pr 42 --file cmd/root.go --line 42 --body "Needs a guard here"
+  bv comment --pr 42 --file cmd/root.go --line 42 --body-file ./comment.md --anchor perf
+  printf 'Needs a guard here\n' | bv comment 42 --file cmd/root.go --line 42
+  bv comment --pr 42 --file cmd/root.go --line 42 --side LEFT --body "Old code path"
+  bv comment --pr 42 --file cmd/root.go --line 42 --body "Needs a guard here" --dry-run`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		if strings.TrimSpace(commentFile) == "" {
-			return fmt.Errorf("--file is required")
+			return fmt.Errorf("could not build review comment\n  why: --file is required\n  try: %s --pr 42 --file path/from/diff --line N --body \"comment\"", cmd.CommandPath())
 		}
 		if commentLine < 1 {
-			return fmt.Errorf("--line must be >= 1")
+			return fmt.Errorf("could not build review comment\n  why: --line must be >= 1\n  try: %s --pr 42 --file %s --line 1 --body \"comment\"", cmd.CommandPath(), strings.TrimSpace(commentFile))
 		}
 
-		body, err := readCommentBody()
+		bodyInput, err := readCommentBody()
 		if err != nil {
 			return err
 		}
@@ -59,17 +76,46 @@ Examples:
 			side = "RIGHT"
 		case "LEFT":
 		default:
-			return fmt.Errorf("--side must be LEFT or RIGHT")
+			return fmt.Errorf("could not build review comment\n  why: --side must be LEFT or RIGHT\n  try: %s --pr 42 --file %s --line %d --side RIGHT --body \"comment\"", cmd.CommandPath(), strings.TrimSpace(commentFile), commentLine)
 		}
 
-		ref, err := resolvePR(args)
+		target, err := resolveTarget(cmd, commentTarget, args)
+		if err != nil {
+			return err
+		}
+		ref := target.Ref
+
+		pr, _, err := fetchPRForComment(ghClient, ctx, ref)
+		if err != nil {
+			return err
+		}
+		rawDiff, err := fetchDiffForComment(ghClient, ctx, ref)
+		if err != nil {
+			return err
+		}
+		patch, err := diff.ParseUnified(rawDiff)
+		if err != nil {
+			return fmt.Errorf("could not validate comment target\n  why: failed to parse the pull request diff: %v\n  try: %s review --repo %s/%s --pr %d", err, cmd.Root().Name(), ref.Owner, ref.Repo, ref.Number)
+		}
+
+		workingDir, _ := os.Getwd()
+		repoRoot, _ := git.RepoRoot()
+		commentTarget, err := preflightCommentTarget(commentPreflightInput{
+			CommandPath: cmd.CommandPath(),
+			RawPath:     commentFile,
+			Line:        commentLine,
+			Side:        side,
+			Patch:       patch,
+			WorkingDir:  workingDir,
+			RepoRoot:    repoRoot,
+		})
 		if err != nil {
 			return err
 		}
 
-		pr, _, err := github.FetchPR(ghClient, ctx, ref)
-		if err != nil {
-			return err
+		if commentDryRun {
+			printCommentDryRun(ref, commentTarget, bodyInput)
+			return nil
 		}
 
 		// Cache HeadSHA for future use.
@@ -81,7 +127,7 @@ Examples:
 		prCache.Number = ref.Number
 		_ = cache.Save(ref, prCache)
 
-		if _, err := github.PostReviewComment(ghClient, ctx, ref, pr.HeadSHA, commentFile, body, side, commentLine); err != nil {
+		if _, err := postReviewComment(ghClient, ctx, ref, pr.HeadSHA, commentTarget.Path, bodyInput.Body, commentTarget.Side, commentTarget.Line); err != nil {
 			return err
 		}
 
@@ -90,20 +136,25 @@ Examples:
 
 		anchorTag := strings.TrimPrefix(strings.TrimSpace(commentAnchor), "#")
 		if anchorTag != "" {
-			storeAnchor(ctx, ref, anchorTag, commentFile, commentLine, body)
+			if err := storeAnchor(ctx, ref, anchorTag, commentTarget.Path, commentTarget.Line, bodyInput.Body); err != nil {
+				fmt.Fprintln(os.Stderr, lipgloss.NewStyle().Faint(true).Render(
+					fmt.Sprintf("warning: comment posted, but anchor #%s was not saved: %v", anchorTag, err),
+				))
+				fmt.Fprintf(os.Stderr, "  try: %s comments --repo %s/%s --pr %d\n", cmd.Root().Name(), ref.Owner, ref.Repo, ref.Number)
+			}
 		}
 
 		return nil
 	},
 }
 
-func readCommentBody() (string, error) {
+func readCommentBody() (commentBodyInput, error) {
 	if strings.TrimSpace(commentBody) != "" && strings.TrimSpace(commentBodyFile) != "" {
-		return "", fmt.Errorf("--body and --body-file are mutually exclusive")
+		return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: --body and --body-file are mutually exclusive\n  try: use only one of --body, --body-file, or stdin")
 	}
 
 	if strings.TrimSpace(commentBody) != "" {
-		return strings.TrimSpace(commentBody), nil
+		return commentBodyInput{Body: strings.TrimSpace(commentBody), Source: "--body"}, nil
 	}
 
 	if strings.TrimSpace(commentBodyFile) != "" {
@@ -117,47 +168,44 @@ func readCommentBody() (string, error) {
 			data, err = os.ReadFile(commentBodyFile)
 		}
 		if err != nil {
-			return "", err
+			return commentBodyInput{}, err
 		}
 		body := strings.TrimSpace(string(data))
 		if body == "" {
-			return "", fmt.Errorf("comment body is empty")
+			return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: %s did not contain any comment text\n  try: add text to %s or pass --body", commentBodyFile, commentBodyFile)
 		}
-		return body, nil
+		return commentBodyInput{Body: body, Source: "--body-file=" + commentBodyFile}, nil
 	}
 
 	stat, err := os.Stdin.Stat()
 	if err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return "", err
+			return commentBodyInput{}, err
 		}
 		body := strings.TrimSpace(string(data))
 		if body == "" {
-			return "", fmt.Errorf("comment body is empty")
+			return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: stdin was provided but empty\n  try: pipe text into %s or pass --body", "bv comment")
 		}
-		return body, nil
+		return commentBodyInput{Body: body, Source: "stdin"}, nil
 	}
 
-	return "", fmt.Errorf("comment body required: use --body, --body-file, or pipe stdin")
+	return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: no comment body was provided\n  try: use --body, --body-file, or pipe stdin")
 }
 
-func storeAnchor(ctx context.Context, ref model.PRRef, tag, path string, line int, body string) {
-	threadNodeID, ok, err := github.FindUnresolvedThreadAt(ghClient, ctx, ref, path, line, body)
+func storeAnchor(ctx context.Context, ref model.PRRef, tag, path string, line int, body string) error {
+	threadNodeID, ok, err := findUnresolvedThreadByAt(ghClient, ctx, ref, path, line, body)
 	if err != nil {
-		fmt.Println(lipgloss.NewStyle().Faint(true).Render("(anchor not saved: " + err.Error() + ")"))
-		return
+		return err
 	}
 	if !ok {
 		// GitHub may normalize comment text; fall back to path+line when body match misses.
-		threadNodeID, ok, err = github.FindUnresolvedThreadAt(ghClient, ctx, ref, path, line, "")
+		threadNodeID, ok, err = findUnresolvedThreadByAt(ghClient, ctx, ref, path, line, "")
 		if err != nil {
-			fmt.Println(lipgloss.NewStyle().Faint(true).Render("(anchor not saved: " + err.Error() + ")"))
-			return
+			return err
 		}
 		if !ok {
-			fmt.Println(lipgloss.NewStyle().Faint(true).Render("(anchor not saved: could not resolve posted thread ID)"))
-			return
+			return fmt.Errorf("the thread was not yet visible in GitHub after posting")
 		}
 	}
 
@@ -170,20 +218,35 @@ func storeAnchor(ctx context.Context, ref model.PRRef, tag, path string, line in
 		ThreadID: threadNodeID,
 	}
 	if err := cache.AddAnchor(ref, anchor); err != nil {
-		fmt.Println(lipgloss.NewStyle().Faint(true).Render("(anchor not saved: " + err.Error() + ")"))
-		return
+		return err
 	}
 
 	fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("#c084fc")).Render(
 		"⚓ anchor #" + tag + " saved",
 	))
+	return nil
+}
+
+func printCommentDryRun(ref model.PRRef, target commentPreflightResult, body commentBodyInput) {
+	dim := lipgloss.NewStyle().Faint(true)
+	bold := lipgloss.NewStyle().Bold(true)
+	fmt.Println(bold.Render("Dry run: comment would be posted"))
+	fmt.Printf("  %s %s/%s PR #%d\n", dim.Render("target:"), ref.Owner, ref.Repo, ref.Number)
+	fmt.Printf("  %s %s\n", dim.Render("file:"), target.Path)
+	fmt.Printf("  %s %d\n", dim.Render("line:"), target.Line)
+	fmt.Printf("  %s %s\n", dim.Render("side:"), target.Side)
+	fmt.Printf("  %s %s\n", dim.Render("body:"), body.Source)
+	fmt.Println()
+	fmt.Println(body.Body)
 }
 
 func init() {
+	addTargetFlags(commentCmd, &commentTarget)
 	commentCmd.Flags().StringVar(&commentFile, "file", "", "File path to comment on")
 	commentCmd.Flags().IntVar(&commentLine, "line", 0, "Line number to comment on")
-	commentCmd.Flags().StringVar(&commentBody, "body", "", "Comment body text")
-	commentCmd.Flags().StringVar(&commentBodyFile, "body-file", "", "Read comment body from file ('-' for stdin)")
+	commentCmd.Flags().StringVar(&commentBody, "body", "", "Comment body text (highest precedence)")
+	commentCmd.Flags().StringVar(&commentBodyFile, "body-file", "", "Read comment body from file ('-' for stdin, used when --body is absent)")
 	commentCmd.Flags().StringVar(&commentAnchor, "anchor", "", "Optional anchor tag to save for the new thread")
 	commentCmd.Flags().StringVar(&commentSide, "side", "RIGHT", "Diff side to comment on (RIGHT or LEFT)")
+	commentCmd.Flags().BoolVar(&commentDryRun, "dry-run", false, "Validate the target and print the resolved comment without posting")
 }

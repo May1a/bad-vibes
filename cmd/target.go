@@ -21,7 +21,6 @@ type targetResolutionInput struct {
 	CommandPath    string
 	RepoFlag       string
 	PRFlag         string
-	Args           []string
 	DetectedRepo   string
 	DetectedBranch string
 }
@@ -38,10 +37,10 @@ func addTargetFlags(cmd *cobra.Command, flags *targetFlags) {
 	cmd.Flags().StringVar(&flags.pr, "pr", "", "Pull request to target (number, owner/repo#N, or URL)")
 }
 
-func resolveTarget(cmd *cobra.Command, flags targetFlags, args []string) (targetResolution, error) {
-	detectedRepo, detectedBranch, err := detectTargetContext(flags, args)
+func resolveTarget(cmd *cobra.Command, flags targetFlags) (targetResolution, error) {
+	detectedRepo, detectedBranch, err := detectTargetContext(flags)
 	if err != nil {
-		rawPR, _, _ := selectedPRArg(flags.pr, args)
+		rawPR := selectedPR(flags.pr)
 		if strings.TrimSpace(rawPR) == "" {
 			repoHint := strings.TrimSpace(flags.repo)
 			if repoHint == "" {
@@ -56,7 +55,6 @@ func resolveTarget(cmd *cobra.Command, flags targetFlags, args []string) (target
 		CommandPath:    cmd.CommandPath(),
 		RepoFlag:       flags.repo,
 		PRFlag:         flags.pr,
-		Args:           args,
 		DetectedRepo:   detectedRepo,
 		DetectedBranch: detectedBranch,
 	})
@@ -90,10 +88,7 @@ func resolveTargetInput(input targetResolutionInput) (targetResolution, error) {
 		}
 	}
 
-	rawPR, hasPositional, err := selectedPRArg(input.PRFlag, input.Args)
-	if err != nil {
-		return targetResolution{}, fmt.Errorf("%s\n  why: %v\n  try: %s --repo owner/repo --pr 42", "could not resolve target pull request", err, input.CommandPath)
-	}
+	rawPR := selectedPR(input.PRFlag)
 
 	defaultRepo := repoFlag
 	if defaultRepo == "" {
@@ -111,7 +106,6 @@ func resolveTargetInput(input targetResolutionInput) (targetResolution, error) {
 				return targetResolution{}, fmt.Errorf("%s\n  why: --repo %q conflicts with %q\n  try: %s --repo %s --pr %d", "could not resolve target pull request", repoFlag, rawPR, input.CommandPath, ref.Owner+"/"+ref.Repo, ref.Number)
 			}
 		}
-		_ = hasPositional
 		return targetResolution{Ref: ref}, nil
 	}
 
@@ -133,16 +127,13 @@ func resolveTargetInput(input targetResolutionInput) (targetResolution, error) {
 	}, nil
 }
 
-func detectTargetContext(flags targetFlags, args []string) (string, string, error) {
-	rawPR, _, err := selectedPRArg(flags.pr, args)
-	if err != nil {
-		return "", "", err
-	}
-
+func detectTargetContext(flags targetFlags) (string, string, error) {
+	rawPR := selectedPR(flags.pr)
 	needRepo := strings.TrimSpace(flags.repo) == "" && (rawPR == "" || isBarePRNumber(rawPR))
 	needBranch := rawPR == ""
 
 	var repo string
+	var err error
 	if needRepo {
 		repo, err = git.RemoteRepo()
 		if err != nil {
@@ -161,18 +152,8 @@ func detectTargetContext(flags targetFlags, args []string) (string, string, erro
 	return repo, branch, nil
 }
 
-func selectedPRArg(flag string, args []string) (string, bool, error) {
-	if strings.TrimSpace(flag) != "" {
-		return strings.TrimSpace(flag), false, nil
-	}
-	switch len(args) {
-	case 0:
-		return "", false, nil
-	case 1:
-		return strings.TrimSpace(args[0]), true, nil
-	default:
-		return "", false, fmt.Errorf("expected at most 1 pull request argument")
-	}
+func selectedPR(flag string) string {
+	return strings.TrimSpace(flag)
 }
 
 func prIncludesRepo(raw string) bool {

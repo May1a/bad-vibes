@@ -5,12 +5,11 @@ import (
 	"testing"
 )
 
-func TestResolveTargetInput_FlagOverridesPositional(t *testing.T) {
+func TestResolveTargetInput_ExplicitPRFlag(t *testing.T) {
 	got, err := resolveTargetInput(targetResolutionInput{
 		CommandPath: "bv summary",
 		RepoFlag:    "owner/repo",
 		PRFlag:      "99",
-		Args:        []string{"42"},
 	})
 	if err != nil {
 		t.Fatalf("resolveTargetInput() error = %v", err)
@@ -36,7 +35,7 @@ func TestResolveTargetInput_ExplicitRepoWithoutGitContext(t *testing.T) {
 
 func TestResolveTargetInput_AutoDetect(t *testing.T) {
 	got, err := resolveTargetInput(targetResolutionInput{
-		CommandPath:    "bv review",
+		CommandPath:    "bv diff",
 		DetectedRepo:   "owner/repo",
 		DetectedBranch: "feature/test",
 	})

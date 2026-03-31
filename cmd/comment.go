@@ -18,8 +18,6 @@ import (
 )
 
 var (
-	commentFile     string
-	commentLine     int
 	commentBody     string
 	commentBodyFile string
 	commentAnchor   string
@@ -36,36 +34,33 @@ var (
 )
 
 var commentCmd = &cobra.Command{
-	Use:   "comment [PR]",
+	Use:   "comment <file>:<line> [body]",
 	Short: "Leave an inline review comment",
 	Long: `Post an inline review comment directly from the CLI.
 
-Required flags:
-  --file PATH
-  --line N
-  body from --body TEXT, --body-file FILE, or stdin
+Required input:
+  <file>:<line>
+  body from the optional 2nd argument, --body, --body-file, or stdin
 
 Targeting:
   Prefer --repo/--pr in scripts or outside a checkout.
   If omitted, bv uses the current repo and the latest open PR on the current branch.
 
 Examples:
-  bv comment --repo owner/repo --pr 42 --file cmd/root.go --line 42 --body "Needs a guard here"
-  bv comment --pr 42 --file cmd/root.go --line 42 --body-file ./comment.md --anchor perf
-  printf 'Needs a guard here\n' | bv comment 42 --file cmd/root.go --line 42
-  bv comment --pr 42 --file cmd/root.go --line 42 --side LEFT --body "Old code path"
-  bv comment --pr 42 --file cmd/root.go --line 42 --body "Needs a guard here" --dry-run`,
-	Args: cobra.MaximumNArgs(1),
+  bv comment --repo owner/repo --pr 42 cmd/root.go:42 "Needs a guard here"
+  bv comment --pr 42 cmd/root.go:42 --body-file ./comment.md --anchor perf
+  printf 'Needs a guard here\n' | bv comment cmd/root.go:42
+  bv comment --pr 42 cmd/root.go:42 "Old code path" --side LEFT
+  bv comment --pr 42 cmd/root.go:42 "Needs a guard here" --dry-run`,
+	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		if strings.TrimSpace(commentFile) == "" {
-			return fmt.Errorf("could not build review comment\n  why: --file is required\n  try: %s --pr 42 --file path/from/diff --line N --body \"comment\"", cmd.CommandPath())
-		}
-		if commentLine < 1 {
-			return fmt.Errorf("could not build review comment\n  why: --line must be >= 1\n  try: %s --pr 42 --file %s --line 1 --body \"comment\"", cmd.CommandPath(), strings.TrimSpace(commentFile))
+		location, err := parseCommentLocation(cmd.CommandPath(), args[0])
+		if err != nil {
+			return err
 		}
 
-		bodyInput, err := readCommentBody()
+		bodyInput, err := readCommentBody(args[1:])
 		if err != nil {
 			return err
 		}
@@ -76,10 +71,10 @@ Examples:
 			side = "RIGHT"
 		case "LEFT":
 		default:
-			return fmt.Errorf("could not build review comment\n  why: --side must be LEFT or RIGHT\n  try: %s --pr 42 --file %s --line %d --side RIGHT --body \"comment\"", cmd.CommandPath(), strings.TrimSpace(commentFile), commentLine)
+			return fmt.Errorf("could not build review comment\n  why: --side must be LEFT or RIGHT\n  try: %s %s --side RIGHT \"comment\"", cmd.CommandPath(), formatCommentLocation(location.Path, location.Line))
 		}
 
-		target, err := resolveTarget(cmd, commentTarget, args)
+		target, err := resolveTarget(cmd, commentTarget)
 		if err != nil {
 			return err
 		}
@@ -95,15 +90,15 @@ Examples:
 		}
 		patch, err := diff.ParseUnified(rawDiff)
 		if err != nil {
-			return fmt.Errorf("could not validate comment target\n  why: failed to parse the pull request diff: %v\n  try: %s review --repo %s/%s --pr %d", err, cmd.Root().Name(), ref.Owner, ref.Repo, ref.Number)
+			return fmt.Errorf("could not validate comment target\n  why: failed to parse the pull request diff: %v\n  try: %s diff --repo %s/%s --pr %d", err, cmd.Root().Name(), ref.Owner, ref.Repo, ref.Number)
 		}
 
 		workingDir, _ := os.Getwd()
 		repoRoot, _ := git.RepoRoot()
 		commentTarget, err := preflightCommentTarget(commentPreflightInput{
 			CommandPath: cmd.CommandPath(),
-			RawPath:     commentFile,
-			Line:        commentLine,
+			RawPath:     location.Path,
+			Line:        location.Line,
 			Side:        side,
 			Patch:       patch,
 			WorkingDir:  workingDir,
@@ -148,9 +143,55 @@ Examples:
 	},
 }
 
-func readCommentBody() (commentBodyInput, error) {
+type commentLocation struct {
+	Path string
+	Line int
+}
+
+func parseCommentLocation(commandPath, raw string) (commentLocation, error) {
+	raw = strings.TrimSpace(raw)
+	idx := strings.LastIndex(raw, ":")
+	if idx <= 0 || idx == len(raw)-1 {
+		return commentLocation{}, fmt.Errorf("could not build review comment\n  why: expected <file>:<line>, got %q\n  try: %s path/from/diff:42 \"comment\"", raw, commandPath)
+	}
+
+	path := strings.TrimSpace(raw[:idx])
+	lineText := strings.TrimSpace(raw[idx+1:])
+	line := 0
+	for _, r := range lineText {
+		if r < '0' || r > '9' {
+			return commentLocation{}, fmt.Errorf("could not build review comment\n  why: %q must end with a numeric line number\n  try: %s path/from/diff:42 \"comment\"", raw, commandPath)
+		}
+		line *= 10
+		line += int(r - '0')
+	}
+	if path == "" || line < 1 {
+		return commentLocation{}, fmt.Errorf("could not build review comment\n  why: expected <file>:<line>, got %q\n  try: %s path/from/diff:42 \"comment\"", raw, commandPath)
+	}
+	return commentLocation{Path: path, Line: line}, nil
+}
+
+func formatCommentLocation(path string, line int) string {
+	return fmt.Sprintf("%s:%d", strings.TrimSpace(path), line)
+}
+
+func readCommentBody(args []string) (commentBodyInput, error) {
+	positionalBody := ""
+	if len(args) > 0 {
+		positionalBody = strings.TrimSpace(args[0])
+	}
+	if positionalBody != "" && strings.TrimSpace(commentBody) != "" {
+		return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: the positional body and --body are mutually exclusive\n  try: pass the comment once, either as the 2nd argument or via --body")
+	}
+	if positionalBody != "" && strings.TrimSpace(commentBodyFile) != "" {
+		return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: the positional body and --body-file are mutually exclusive\n  try: use either the 2nd argument or --body-file")
+	}
 	if strings.TrimSpace(commentBody) != "" && strings.TrimSpace(commentBodyFile) != "" {
-		return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: --body and --body-file are mutually exclusive\n  try: use only one of --body, --body-file, or stdin")
+		return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: --body and --body-file are mutually exclusive\n  try: use only one of the 2nd argument, --body, --body-file, or stdin")
+	}
+
+	if positionalBody != "" {
+		return commentBodyInput{Body: positionalBody, Source: "argument"}, nil
 	}
 
 	if strings.TrimSpace(commentBody) != "" {
@@ -185,12 +226,12 @@ func readCommentBody() (commentBodyInput, error) {
 		}
 		body := strings.TrimSpace(string(data))
 		if body == "" {
-			return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: stdin was provided but empty\n  try: pipe text into %s or pass --body", "bv comment")
+			return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: stdin was provided but empty\n  try: pipe text into %s or pass a 2nd argument", "bv comment path/from/diff:42")
 		}
 		return commentBodyInput{Body: body, Source: "stdin"}, nil
 	}
 
-	return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: no comment body was provided\n  try: use --body, --body-file, or pipe stdin")
+	return commentBodyInput{}, fmt.Errorf("could not build review comment\n  why: no comment body was provided\n  try: use the 2nd argument, --body, --body-file, or pipe stdin")
 }
 
 func storeAnchor(ctx context.Context, ref model.PRRef, tag, path string, line int, body string) error {
@@ -242,10 +283,8 @@ func printCommentDryRun(ref model.PRRef, target commentPreflightResult, body com
 
 func init() {
 	addTargetFlags(commentCmd, &commentTarget)
-	commentCmd.Flags().StringVar(&commentFile, "file", "", "File path to comment on")
-	commentCmd.Flags().IntVar(&commentLine, "line", 0, "Line number to comment on")
-	commentCmd.Flags().StringVar(&commentBody, "body", "", "Comment body text (highest precedence)")
-	commentCmd.Flags().StringVar(&commentBodyFile, "body-file", "", "Read comment body from file ('-' for stdin, used when --body is absent)")
+	commentCmd.Flags().StringVar(&commentBody, "body", "", "Comment body text (used when the 2nd argument is omitted)")
+	commentCmd.Flags().StringVar(&commentBodyFile, "body-file", "", "Read comment body from file ('-' for stdin, used when no body argument is provided)")
 	commentCmd.Flags().StringVar(&commentAnchor, "anchor", "", "Optional anchor tag to save for the new thread")
 	commentCmd.Flags().StringVar(&commentSide, "side", "RIGHT", "Diff side to comment on (RIGHT or LEFT)")
 	commentCmd.Flags().BoolVar(&commentDryRun, "dry-run", false, "Validate the target and print the resolved comment without posting")

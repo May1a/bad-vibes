@@ -31,14 +31,14 @@ type commentPreflightResult struct {
 }
 
 func preflightCommentTarget(input commentPreflightInput) (commentPreflightResult, error) {
-	path, err := normalizeCommentPath(input.CommandPath, input.RawPath, input.Patch.Paths(), input.WorkingDir, input.RepoRoot)
+	path, err := normalizeCommentPath(input.CommandPath, input.RawPath, input.Line, input.Patch.Paths(), input.WorkingDir, input.RepoRoot)
 	if err != nil {
 		return commentPreflightResult{}, err
 	}
 
 	file, ok := input.Patch.File(path)
 	if !ok {
-		return commentPreflightResult{}, fmt.Errorf("could not validate comment target\n  why: %q was not found in the pull request diff\n  try: %s", path, formatPathSuggestions(input.CommandPath, path, input.Patch.Paths()))
+		return commentPreflightResult{}, fmt.Errorf("could not validate comment target\n  why: %q was not found in the pull request diff\n  try: %s", path, formatPathSuggestions(input.CommandPath, path, input.Line, input.Patch.Paths()))
 	}
 
 	if file.HasCommentLine(input.Side, input.Line) {
@@ -50,14 +50,14 @@ func preflightCommentTarget(input commentPreflightInput) (commentPreflightResult
 	}
 
 	if file.HasCommentLine(oppositeSide(input.Side), input.Line) {
-		return commentPreflightResult{}, fmt.Errorf("could not validate comment target\n  why: %s:%d is only available on the %s side of the diff\n  try: %s --file %s --line %d --side %s", path, input.Line, oppositeSide(input.Side), input.CommandPath, path, input.Line, oppositeSide(input.Side))
+		return commentPreflightResult{}, fmt.Errorf("could not validate comment target\n  why: %s:%d is only available on the %s side of the diff\n  try: %s %s --side %s \"comment\"", path, input.Line, oppositeSide(input.Side), input.CommandPath, formatCommentLocation(path, input.Line), oppositeSide(input.Side))
 	}
 
 	validLines := file.ValidLines(input.Side)
 	return commentPreflightResult{}, fmt.Errorf("could not validate comment target\n  why: %s:%d is not part of the pull request diff on the %s side\n  try: choose one of %s", path, input.Line, input.Side, summarizeLines(validLines))
 }
 
-func normalizeCommentPath(commandPath, raw string, changedFiles []string, workingDir, repoRoot string) (string, error) {
+func normalizeCommentPath(commandPath, raw string, line int, changedFiles []string, workingDir, repoRoot string) (string, error) {
 	candidates := pathCandidates(raw, workingDir, repoRoot)
 	fileSet := map[string]struct{}{}
 	for _, changed := range changedFiles {
@@ -69,7 +69,7 @@ func normalizeCommentPath(commandPath, raw string, changedFiles []string, workin
 		}
 	}
 
-	return "", fmt.Errorf("could not validate comment target\n  why: %q is not part of the pull request diff\n  try: %s", raw, formatPathSuggestions(commandPath, raw, changedFiles))
+	return "", fmt.Errorf("could not validate comment target\n  why: %q is not part of the pull request diff\n  try: %s", raw, formatPathSuggestions(commandPath, raw, line, changedFiles))
 }
 
 func pathCandidates(raw, workingDir, repoRoot string) []string {
@@ -105,15 +105,19 @@ func pathCandidates(raw, workingDir, repoRoot string) []string {
 	return candidates
 }
 
-func formatPathSuggestions(commandPath, raw string, changedFiles []string) string {
+func formatPathSuggestions(commandPath, raw string, line int, changedFiles []string) string {
 	matches := suggestPaths(raw, changedFiles)
 	if len(matches) == 0 {
-		return fmt.Sprintf("%s --file path/from/pr/diff --line N --side RIGHT", commandPath)
+		return fmt.Sprintf("%s path/from/pr/diff:%d \"comment\"", commandPath, line)
 	}
 	if len(matches) > 3 {
 		matches = matches[:3]
 	}
-	return "use one of: " + strings.Join(matches, ", ")
+	targets := make([]string, 0, len(matches))
+	for _, match := range matches {
+		targets = append(targets, formatCommentLocation(match, line))
+	}
+	return "use one of: " + strings.Join(targets, ", ")
 }
 
 func suggestPaths(raw string, changedFiles []string) []string {

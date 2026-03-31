@@ -12,7 +12,7 @@ import (
 var anchorsTarget targetFlags
 
 var anchorsCmd = &cobra.Command{
-	Use:   "anchors [PR]",
+	Use:   "anchors",
 	Short: "List local anchors for a PR",
 	Long: `List local anchors for a pull request.
 
@@ -23,11 +23,10 @@ Targeting:
 Examples:
   bv anchors --repo owner/repo --pr 42
   bv anchors --pr 42
-  bv anchors 42   # positional shorthand
   bv anchors`,
-	Args: cobra.MaximumNArgs(1),
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		target, err := resolveTarget(cmd, anchorsTarget, args)
+		target, err := resolveTarget(cmd, anchorsTarget)
 		if err != nil {
 			return err
 		}

@@ -6,15 +6,16 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/may/bad-vibes/internal/github"
+	"github.com/may/bad-vibes/internal/model"
 	"github.com/spf13/cobra"
 )
 
 var summaryTarget targetFlags
 
 var summaryCmd = &cobra.Command{
-	Use:   "summary [PR]",
+	Use:   "summary",
 	Short: "Show a tidy PR overview",
-	Long: `Show a tidy PR overview including title, author, state, diff stats, and unresolved thread count.
+	Long: `Show a tidy PR overview including title, author, state, diff stats, unresolved thread count, and per-file changes.
 
 Targeting:
   Prefer --repo/--pr in scripts or outside a checkout.
@@ -23,12 +24,11 @@ Targeting:
 Examples:
   bv summary --repo owner/repo --pr 42
   bv summary --pr 42
-  bv summary 42    # positional shorthand
   bv summary       # auto-detect from current branch`,
-	Args: cobra.MaximumNArgs(1),
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		target, err := resolveTarget(cmd, summaryTarget, args)
+		target, err := resolveTarget(cmd, summaryTarget)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ Examples:
 		if len(files) > 0 {
 			fmt.Println(dim.Render("Changed files:"))
 			for _, f := range files {
-				fmt.Println("  " + dim.Render("·") + " " + f)
+				fmt.Printf("  %s %s %s\n", dim.Render("·"), formatSummaryFileStatus(f), formatSummaryFileDelta(f))
 			}
 			fmt.Println()
 		}
@@ -100,4 +100,24 @@ Examples:
 
 func init() {
 	addTargetFlags(summaryCmd, &summaryTarget)
+}
+
+func formatSummaryFileStatus(file model.PRFile) string {
+	label := "mod"
+	switch strings.ToLower(file.Status) {
+	case "added":
+		label = "new"
+	case "removed":
+		label = "del"
+	case "renamed":
+		label = "ren"
+	}
+	if strings.EqualFold(file.Status, "renamed") && file.PreviousPath != "" {
+		return fmt.Sprintf("[%s] %s -> %s", label, file.PreviousPath, file.Path)
+	}
+	return fmt.Sprintf("[%s] %s", label, file.Path)
+}
+
+func formatSummaryFileDelta(file model.PRFile) string {
+	return fmt.Sprintf("(+%d/-%d)", file.Additions, file.Deletions)
 }

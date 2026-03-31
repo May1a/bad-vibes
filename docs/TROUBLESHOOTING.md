@@ -130,17 +130,9 @@ curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit
    ```
 2. Specify PR explicitly:
    ```sh
-   bv summary 42
+   bv summary --pr 42
    ```
 3. Create a PR if none exists
-
-### "PR has >100 changed files; file list is truncated"
-
-**Note:** This is a warning, not an error. The GitHub API limits file listings to 100.
-
-**Workarounds:**
-1. Use `bv review` to see full diff
-2. View files on GitHub directly
 
 ## Comment/Thread Issues
 
@@ -242,7 +234,7 @@ curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit
 **Solutions:**
 1. View diff in pager:
    ```sh
-   bv review | less -R
+   bv diff | less -R
    ```
 2. Close and reopen terminal
 

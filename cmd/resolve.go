@@ -18,7 +18,7 @@ var (
 )
 
 var resolveCmd = &cobra.Command{
-	Use:   "resolve [PR]",
+	Use:   "resolve",
 	Short: "Resolve a review thread",
 	Long: `Mark a review thread as resolved.
 
@@ -32,12 +32,11 @@ Targeting:
 Examples:
   bv resolve --repo owner/repo --pr 42 --id PRRT_abc123
   bv resolve --pr 42 --id #perf
-  bv resolve 42 --id #PR        # positional shorthand
   bv resolve                    # auto-detect interactive mode`,
-	Args: cobra.MaximumNArgs(1),
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		target, err := resolveTarget(cmd, resolveTargetCfg, args)
+		target, err := resolveTarget(cmd, resolveTargetCfg)
 		if err != nil {
 			return err
 		}

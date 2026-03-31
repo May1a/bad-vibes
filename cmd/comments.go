@@ -18,11 +18,11 @@ var (
 )
 
 var commentsCmd = &cobra.Command{
-	Use:   "comments [PR]",
+	Use:   "comments",
 	Short: "Show unresolved review comments",
 	Long: `Show unresolved review threads in a compact, readable form.
 
-By default this prints a short summary for each unresolved thread.
+By default this prints a short summary for each unresolved thread plus a code snippet.
 Use --verbose to show every comment in the thread.
 Use --patch to include diff hunk context.
 
@@ -33,13 +33,12 @@ Targeting:
 Examples:
   bv comments --repo owner/repo --pr 42
   bv comments --pr 42
-  bv comments 42   # positional shorthand
   bv comments      # auto-detect from current branch
   bv comments --verbose --patch`,
-	Args: cobra.MaximumNArgs(1),
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		target, err := resolveTarget(cmd, commentsTarget, args)
+		target, err := resolveTarget(cmd, commentsTarget)
 		if err != nil {
 			return err
 		}
@@ -63,8 +62,9 @@ Examples:
 
 		anchors, _ := cache.ListAnchors(ref)
 		display.PrintThreads(unresolved, anchors, display.ThreadRenderOptions{
-			Verbose:  commentsVerbose,
-			ShowDiff: commentsPatch,
+			Verbose:     commentsVerbose,
+			ShowDiff:    commentsPatch,
+			ShowSnippet: true,
 		})
 		return nil
 	},

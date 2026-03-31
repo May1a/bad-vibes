@@ -58,16 +58,14 @@ The result of `gh auth token` is cached to disk so the subprocess only runs when
 
 ## Usage
 
-Run `bv` from inside any git repository with a GitHub remote. The repo and current branch are auto-detected — no config files needed.
-
-The `<PR>` argument is optional on every command. When omitted, `bv` picks the most recent open PR on your current branch.
+Run `bv` from inside any git repository with a GitHub remote. The repo and current branch are auto-detected, and every repo-scoped command defaults to the newest open PR on the current branch.
 
 ### PR reference formats
 
 ```
-bv summary 42                              # bare number
-bv summary owner/repo#42                   # cross-repo
-bv summary https://github.com/…/pull/42   # full URL
+bv summary --pr 42                         # bare number
+bv summary --pr owner/repo#42             # cross-repo
+bv summary --pr https://github.com/…/pull/42
 bv summary                                 # auto-detect from current branch
 ```
 
@@ -86,51 +84,52 @@ bv prs --branch feat/x    # open PRs on a specific branch
 bv prs --closed           # closed and merged PRs
 ```
 
-### `bv summary [PR]`
+### `bv summary`
 
-Tidy overview: title, author, state, diff stats, unresolved thread count, description, changed files.
+Tidy overview: title, author, state, diff stats, unresolved thread count, description, and changed files with per-file additions/deletions plus created/deleted markers.
 
 ```
 bv summary
-bv summary 42
+bv summary --pr 42
 ```
 
-### `bv review [PR]`
+### `bv diff`
 
 Coloured unified diff streamed to stdout.
 
 ```
-bv review
-bv review 42
+bv diff
+bv diff --pr 42
+bv show --pr 42
 ```
 
 Line numbers, additions in green, deletions in red, context in slate.
 
-### `bv comments [PR]`
+### `bv comments`
 
 Show only **unresolved** review threads. Resolved ones are silently absent.
 
 ```
 bv comments
-bv comments 42
+bv comments --pr 42
 bv comments --verbose --patch
 ```
 
-By default `bv comments` prints a compact summary for each thread. Use `--verbose` to show every comment in the thread and `--patch` to include the diff hunk context. PR-level threads (no file) are shown as "PR-level comment".
+By default `bv comments` prints a compact summary for each unresolved thread plus a code snippet. Use `--verbose` to show every comment in the thread and `--patch` to include the full diff hunk. PR-level threads (no file) are shown as "PR-level comment".
 
-### `bv comment [PR]`
+### `bv comment`
 
 Post an inline review comment directly from the CLI.
 
 ```
-bv comment --file cmd/root.go --line 42 --body "Needs a guard here"
-bv comment 42 --file cmd/root.go --line 42 --body-file ./comment.md --anchor perf
-printf 'Needs a guard here\n' | bv comment --file cmd/root.go --line 42
+bv comment cmd/root.go:42 "Needs a guard here"
+bv comment --pr 42 cmd/root.go:42 --body-file ./comment.md --anchor perf
+printf 'Needs a guard here\n' | bv comment cmd/root.go:42
 ```
 
-Required inputs: `--file`, `--line`, and a body via `--body`, `--body-file`, or stdin. If you set `--anchor`, `bv` re-fetches the thread list after posting to capture the live thread ID and saves the anchor locally.
+Required inputs: `<file>:<line>` and a body via the optional 2nd argument, `--body`, `--body-file`, or stdin. If you set `--anchor`, `bv` re-fetches the thread list after posting to capture the live thread ID and saves the anchor locally.
 
-### `bv resolve [PR]`
+### `bv resolve`
 
 Resolve review threads.
 
@@ -138,7 +137,6 @@ Resolve review threads.
 
 ```
 bv resolve
-bv resolve 42
 ```
 
 **Direct mode** — resolve a specific thread without the TUI:
@@ -149,13 +147,12 @@ bv resolve --id #perf                # anchor tag (resolved by path+line lookup)
 bv resolve --id #PR                  # first unresolved PR-level thread
 ```
 
-### `bv anchors [PR]`
+### `bv anchors`
 
 List saved anchor tags for a PR.
 
 ```
 bv anchors
-bv anchors 42
 ```
 
 ---
@@ -165,7 +162,7 @@ bv anchors 42
 Anchors are named bookmarks for review threads. Tag a comment during `bv comment` and you can reference it later by name:
 
 ```sh
-bv comment --file cmd/root.go --line 42 --body "Needs work" --anchor perf
+bv comment cmd/root.go:42 "Needs work" --anchor perf
 bv resolve --id #perf   # resolve that thread by name
 ```
 

@@ -25,6 +25,15 @@ type PR struct {
 	Deletions    int
 }
 
+// PRFile holds per-file diff stats for a PR.
+type PRFile struct {
+	Path         string
+	PreviousPath string
+	Status       string
+	Additions    int
+	Deletions    int
+}
+
 // ReviewThread is a single inline or file-level review thread on a PR.
 type ReviewThread struct {
 	ID          string // GraphQL node ID (PRRT_...) — used in resolveReviewThread
@@ -49,11 +58,11 @@ type Comment struct {
 
 // Anchor is a user-defined local alias for a review thread.
 type Anchor struct {
-	Tag      string    // e.g. "perf" (without the #)
-	ThreadID string    // GraphQL node ID of the ReviewThread
-	Path     string    // file path for display convenience
+	Tag      string // e.g. "perf" (without the #)
+	ThreadID string // GraphQL node ID of the ReviewThread
+	Path     string // file path for display convenience
 	Line     int
-	Body     string    // first comment body snippet
+	Body     string // first comment body snippet
 	Created  time.Time
 }
 
@@ -63,7 +72,7 @@ type PRCache struct {
 	Owner   string
 	Repo    string
 	Number  int
-	PRID    string   // GraphQL node ID of the PR
-	HeadSHA string   // cached head commit OID
+	PRID    string // GraphQL node ID of the PR
+	HeadSHA string // cached head commit OID
 	Anchors []Anchor
 }

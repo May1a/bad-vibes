@@ -197,7 +197,7 @@ Formatted terminal output
 ### `bv comment` Flow
 
 ```
-User runs: bv comment --file ... --line ... --body ...
+User runs: bv comment path/to/file.go:42 "comment body"
     │
     ▼
 cmd/comment.go:RunE

@@ -8,11 +8,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var reviewTarget targetFlags
+var diffTarget targetFlags
 
-var reviewCmd = &cobra.Command{
-	Use:   "review [PR]",
-	Short: "Display the PR diff",
+var diffCmd = &cobra.Command{
+	Use:     "diff",
+	Aliases: []string{"show", "review"},
+	Short:   "Display the PR diff",
 	Long: `Display the PR diff with colored line numbers.
 
 Targeting:
@@ -20,14 +21,14 @@ Targeting:
   If omitted, bv uses the current repo and the latest open PR on the current branch.
 
 Examples:
-  bv review --repo owner/repo --pr 42
-  bv review --pr 42
-  bv review 42   # positional shorthand
-  bv review      # auto-detect from current branch`,
-	Args: cobra.MaximumNArgs(1),
+  bv diff --repo owner/repo --pr 42
+  bv diff --pr 42
+  bv diff      # auto-detect from current branch
+  bv show --pr 42`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		target, err := resolveTarget(cmd, reviewTarget, args)
+		target, err := resolveTarget(cmd, diffTarget)
 		if err != nil {
 			return err
 		}
@@ -46,5 +47,5 @@ Examples:
 }
 
 func init() {
-	addTargetFlags(reviewCmd, &reviewTarget)
+	addTargetFlags(diffCmd, &diffTarget)
 }

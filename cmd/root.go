@@ -39,7 +39,7 @@ Targeting modes:
   Auto-detect: bv summary   # current repo + latest open PR on current branch`,
 	Example: `  bv summary --repo owner/repo --pr 42
   bv comments --pr 42
-  bv comment --repo owner/repo --pr 42 --file cmd/root.go --line 42 --body "Needs a guard here"`,
+  bv comment --repo owner/repo --pr 42 cmd/root.go:42 "Needs a guard here"`,
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if !requiresRepoContext(cmd) {
@@ -62,7 +62,7 @@ Targeting modes:
 func requiresRepoContext(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "review", "comments", "comment", "resolve", "summary", "anchors", "prs":
+		case "diff", "comments", "comment", "resolve", "summary", "anchors", "prs":
 			return true
 		}
 	}
@@ -71,7 +71,7 @@ func requiresRepoContext(cmd *cobra.Command) bool {
 
 func init() {
 	rootCmd.AddCommand(
-		reviewCmd,
+		diffCmd,
 		commentsCmd,
 		commentCmd,
 		resolveCmd,

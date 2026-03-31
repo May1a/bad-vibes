@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/may/bad-vibes/internal/diff"
 	"github.com/may/bad-vibes/internal/model"
 )
 
@@ -23,8 +24,9 @@ var (
 )
 
 type ThreadRenderOptions struct {
-	Verbose  bool
-	ShowDiff bool
+	Verbose     bool
+	ShowDiff    bool
+	ShowSnippet bool
 }
 
 func highlightAnchors(body string) string {
@@ -69,6 +71,13 @@ func printThread(t model.ReviewThread, anchorByThread map[string]string, opts Th
 			fmt.Println("  " + styleThreadHunk.Render(hunkLine))
 		}
 		fmt.Println()
+	} else if opts.ShowSnippet {
+		if snippet := renderThreadSnippet(t); len(snippet) > 0 {
+			for _, line := range snippet {
+				fmt.Println("  " + line)
+			}
+			fmt.Println()
+		}
 	}
 
 	if !opts.Verbose {
@@ -119,4 +128,117 @@ func previewBody(body string) string {
 		return string(runes[:177]) + "..."
 	}
 	return body
+}
+
+type snippetLine struct {
+	Kind      diff.LineKind
+	Content   string
+	OldLine   int
+	NewLine   int
+	Highlight bool
+}
+
+func renderThreadSnippet(t model.ReviewThread) []string {
+	lines, header, ok := buildThreadSnippet(t, 2)
+	if !ok {
+		return nil
+	}
+
+	rendered := []string{styleThreadHunk.Render(header)}
+	for _, line := range lines {
+		marker := " "
+		if line.Highlight {
+			marker = styleThreadFile.Render(">")
+		}
+		num := styleLineNum.Render(fmt.Sprintf("%4s %4s", formatSnippetLineNumber(line.OldLine), formatSnippetLineNumber(line.NewLine)))
+
+		var content string
+		switch line.Kind {
+		case diff.LineAdd:
+			content = styleAdd.Render(line.Content)
+		case diff.LineDelete:
+			content = styleDel.Render(line.Content)
+		default:
+			content = styleContext.Render(line.Content)
+		}
+		rendered = append(rendered, fmt.Sprintf("%s %s %s", marker, num, content))
+	}
+	return rendered
+}
+
+func buildThreadSnippet(t model.ReviewThread, contextLines int) ([]snippetLine, string, bool) {
+	rawHunk := firstDiffHunk(t)
+	if rawHunk == "" || t.Path == "" {
+		return nil, "", false
+	}
+
+	fakePatch := fmt.Sprintf("diff --git a/%[1]s b/%[1]s\n--- a/%[1]s\n+++ b/%[1]s\n%s", t.Path, rawHunk)
+	patch, err := diff.ParseUnified(fakePatch)
+	if err != nil || len(patch.Files) == 0 || len(patch.Files[0].Hunks) == 0 {
+		return nil, "", false
+	}
+
+	hunk := patch.Files[0].Hunks[0]
+	targetIndex := findThreadSnippetTarget(t, hunk.Lines)
+	if targetIndex < 0 {
+		targetIndex = 0
+	}
+
+	start := targetIndex - contextLines
+	if start < 0 {
+		start = 0
+	}
+	end := targetIndex + contextLines + 1
+	if end > len(hunk.Lines) {
+		end = len(hunk.Lines)
+	}
+
+	lines := make([]snippetLine, 0, end-start)
+	for i := start; i < end; i++ {
+		line := hunk.Lines[i]
+		lines = append(lines, snippetLine{
+			Kind:      line.Kind,
+			Content:   line.Content,
+			OldLine:   line.OldLine,
+			NewLine:   line.NewLine,
+			Highlight: i == targetIndex,
+		})
+	}
+	return lines, hunk.Header, true
+}
+
+func firstDiffHunk(t model.ReviewThread) string {
+	for _, comment := range t.Comments {
+		if strings.TrimSpace(comment.DiffHunk) != "" {
+			return comment.DiffHunk
+		}
+	}
+	return ""
+}
+
+func findThreadSnippetTarget(t model.ReviewThread, lines []diff.Line) int {
+	targetLine := t.Line
+	if targetLine == 0 {
+		targetLine = t.StartLine
+	}
+	for i, line := range lines {
+		switch strings.ToUpper(strings.TrimSpace(t.DiffSide)) {
+		case "LEFT":
+			if line.OldLine == targetLine && line.Kind != diff.LineAdd {
+				return i
+			}
+		default:
+			if line.NewLine == targetLine && line.Kind != diff.LineDelete {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func formatSnippetLineNumber(n int) string {
+	if n == 0 {
+		return "·"
+	}
+	return fmt.Sprintf("%d", n)
 }

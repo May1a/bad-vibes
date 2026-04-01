@@ -38,11 +38,11 @@ Examples:
 		if err != nil {
 			return fmt.Errorf("could not resolve target repository\n  why: %v\n  try: bv prs from inside a GitHub checkout", err)
 		}
-		parts := strings.SplitN(repo, "/", 2)
-		base := model.PRRef{Owner: parts[0], Repo: parts[1]}
-		if base.Owner == "" || base.Repo == "" {
+		owner, repoName, err := splitRepo(repo)
+		if err != nil {
 			return fmt.Errorf("could not detect repository from git remote; ensure you're in a git repo with a GitHub remote")
 		}
+		base := model.PRRef{Owner: owner, Repo: repoName}
 		states := github.ListStates(prsClosed)
 		if prsAllBranches && prsBranch != "" {
 			return fmt.Errorf("--all-branches and --branch are mutually exclusive")

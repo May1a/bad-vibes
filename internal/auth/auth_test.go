@@ -8,10 +8,7 @@ import (
 )
 
 func TestToken_FromEnv(t *testing.T) {
-	original := os.Getenv("GITHUB_TOKEN")
-	defer os.Setenv("GITHUB_TOKEN", original)
-
-	os.Setenv("GITHUB_TOKEN", "test-token-from-env")
+	t.Setenv("GITHUB_TOKEN", "test-token-from-env")
 
 	token, err := Token()
 	if err != nil {
@@ -61,7 +58,9 @@ func TestReadCachedToken_Expired(t *testing.T) {
 
 	// Set modification time to 2 hours ago
 	expired := time.Now().Add(-2 * time.Hour)
-	os.Chtimes(path, expired, expired)
+	if err := os.Chtimes(path, expired, expired); err != nil {
+		t.Fatalf("failed to update cache timestamps: %v", err)
+	}
 
 	_, ok := readCachedToken(path)
 	if ok {

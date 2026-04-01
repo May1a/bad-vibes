@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
+	anchorutil "github.com/may/bad-vibes/internal/anchors"
 	"github.com/may/bad-vibes/internal/cache"
 	"github.com/may/bad-vibes/internal/display"
 	"github.com/may/bad-vibes/internal/github"
@@ -60,8 +61,8 @@ Examples:
 			return nil
 		}
 
-		anchors, _ := cache.ListAnchors(ref)
-		display.PrintThreads(unresolved, anchors, display.ThreadRenderOptions{
+		localAnchors, _ := cache.ListAnchors(ref)
+		display.PrintThreads(unresolved, anchorutil.Merge(localAnchors, unresolved), display.ThreadRenderOptions{
 			Verbose:     commentsVerbose,
 			ShowDiff:    commentsPatch,
 			ShowSnippet: true,

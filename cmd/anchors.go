@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	anchorutil "github.com/may/bad-vibes/internal/anchors"
 	"github.com/may/bad-vibes/internal/cache"
+	"github.com/may/bad-vibes/internal/github"
 	"github.com/spf13/cobra"
 )
 
@@ -13,8 +15,11 @@ var anchorsTarget targetFlags
 
 var anchorsCmd = &cobra.Command{
 	Use:   "anchors",
-	Short: "List local anchors for a PR",
-	Long: `List local anchors for a pull request.
+	Short: "List anchors for a PR",
+	Long: `List anchors for a pull request.
+
+This includes locally saved anchors plus tags discovered from unresolved
+thread bodies.
 
 Targeting:
   Prefer --repo/--pr in scripts or outside a checkout.
@@ -31,10 +36,17 @@ Examples:
 			return err
 		}
 		ref := target.Ref
-		anchors, err := cache.ListAnchors(ref)
+		localAnchors, err := cache.ListAnchors(ref)
 		if err != nil {
 			return err
 		}
+
+		threads, err := github.FetchReviewThreads(ghClient, cmd.Context(), ref)
+		if err != nil && len(localAnchors) == 0 {
+			return err
+		}
+
+		anchors := anchorutil.Merge(localAnchors, threads)
 		if len(anchors) == 0 {
 			fmt.Println(lipgloss.NewStyle().Faint(true).Render("No anchors defined for this PR."))
 			return nil

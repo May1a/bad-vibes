@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	anchorutil "github.com/may/bad-vibes/internal/anchors"
 	"github.com/may/bad-vibes/internal/cache"
 	"github.com/may/bad-vibes/internal/github"
 	"github.com/may/bad-vibes/internal/model"
@@ -64,20 +65,18 @@ Examples:
 					threadID = id
 					resolveDesc = "PR-level comment"
 				} else {
-					// Anchor lookup — symlink style: use path+line to find the live thread ID.
-					anchors, err := cache.ListAnchors(ref)
+					// Anchor lookup — use local anchors first, then discover live tags from unresolved threads.
+					localAnchors, err := cache.ListAnchors(ref)
 					if err != nil {
 						return err
 					}
-					var anchor *model.Anchor
-					for i := range anchors {
-						if anchors[i].Tag == tag {
-							anchor = &anchors[i]
-							break
-						}
+					threads, err := github.FetchReviewThreads(ghClient, ctx, ref)
+					if err != nil {
+						return err
 					}
-					if anchor == nil {
-						return fmt.Errorf("no anchor %q found for PR #%d", resolveID, ref.Number)
+					anchor, err := anchorutil.Resolve(localAnchors, threads, tag)
+					if err != nil {
+						return fmt.Errorf("%w for PR #%d", err, ref.Number)
 					}
 					// Resolve the live thread ID by location (symlink dereference).
 					id, ok, err := github.FindUnresolvedThreadAt(ghClient, ctx, ref, anchor.Path, anchor.Line, anchor.Body)

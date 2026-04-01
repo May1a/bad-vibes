@@ -38,9 +38,9 @@ func highlightAnchors(body string) string {
 // PrintThreads renders a slice of review threads to stdout.
 // The caller is responsible for pre-filtering (e.g. only unresolved threads).
 func PrintThreads(threads []model.ReviewThread, anchors []model.Anchor, opts ThreadRenderOptions) {
-	anchorByThread := map[string]string{}
+	anchorByThread := map[string][]string{}
 	for _, a := range anchors {
-		anchorByThread[a.ThreadID] = "#" + a.Tag
+		anchorByThread[a.ThreadID] = append(anchorByThread[a.ThreadID], "#"+a.Tag)
 	}
 
 	for i, t := range threads {
@@ -51,13 +51,13 @@ func PrintThreads(threads []model.ReviewThread, anchors []model.Anchor, opts Thr
 	}
 }
 
-func printThread(t model.ReviewThread, anchorByThread map[string]string, opts ThreadRenderOptions) {
+func printThread(t model.ReviewThread, anchorByThread map[string][]string, opts ThreadRenderOptions) {
 	header := styleThreadFile.Render(threadLocation(t)) + "  " + styleThreadID.Render("["+t.ID+"]")
 	if t.IsOutdated {
 		header += "  " + styleOutdated.Render("[OUTDATED]")
 	}
-	if tag, ok := anchorByThread[t.ID]; ok {
-		header += "  " + styleAnchorTag.Render(tag)
+	if tags, ok := anchorByThread[t.ID]; ok {
+		header += "  " + styleAnchorTag.Render(strings.Join(tags, " "))
 	}
 	fmt.Println(header)
 

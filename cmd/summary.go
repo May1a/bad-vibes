@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/may/bad-vibes/internal/github"
@@ -15,16 +16,11 @@ var summaryTarget targetFlags
 var summaryCmd = &cobra.Command{
 	Use:   "summary",
 	Short: "Show a tidy PR overview",
-	Long: `Show a tidy PR overview including title, author, state, diff stats, unresolved thread count, and per-file changes.
-
-Targeting:
-  Prefer --repo/--pr in scripts or outside a checkout.
-  If omitted, bv uses the current repo and the latest open PR on the current branch.
+	Long: `Show title, author, state, diff stats, unresolved thread count, and changed files.
 
 Examples:
-  bv summary --repo owner/repo --pr 42
-  bv summary --pr 42
-  bv summary       # auto-detect from current branch`,
+  bv summary
+  bv summary --pr 42`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -34,20 +30,62 @@ Examples:
 		}
 		ref := target.Ref
 
-		pr, files, err := github.FetchPR(ghClient, ctx, ref)
-		if err != nil {
-			return err
-		}
-		threads, err := github.FetchReviewThreads(ghClient, ctx, ref)
-		if err != nil {
-			return err
+		var (
+			pr              model.PR
+			files           []model.PRFile
+			unresolvedCount int
+			runErr          error
+			mu              sync.Mutex
+			wg              sync.WaitGroup
+		)
+		setErr := func(err error) {
+			if err == nil {
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if runErr == nil {
+				runErr = err
+			}
 		}
 
-		unresolvedCount := 0
-		for _, t := range threads {
-			if !t.IsResolved {
-				unresolvedCount++
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			value, err := github.FetchPRMetadata(ghClient, ctx, ref)
+			if err != nil {
+				setErr(err)
+				return
 			}
+			mu.Lock()
+			pr = value
+			mu.Unlock()
+		}()
+		go func() {
+			defer wg.Done()
+			value, err := github.FetchPRFiles(ghClient, ctx, ref)
+			if err != nil {
+				setErr(err)
+				return
+			}
+			mu.Lock()
+			files = value
+			mu.Unlock()
+		}()
+		go func() {
+			defer wg.Done()
+			value, err := github.CountUnresolvedReviewThreads(ghClient, ctx, ref)
+			if err != nil {
+				setErr(err)
+				return
+			}
+			mu.Lock()
+			unresolvedCount = value
+			mu.Unlock()
+		}()
+		wg.Wait()
+		if runErr != nil {
+			return runErr
 		}
 
 		bold := lipgloss.NewStyle().Bold(true)
@@ -60,11 +98,11 @@ Examples:
 		fmt.Printf("%s  %s\n\n", dim.Render("by"), pr.Author)
 
 		stateColor := green
-		if pr.State != "OPEN" {
+		if pr.State != model.PRStateOpen {
 			stateColor = dim
 		}
 		fmt.Printf("  %s  %s  %s  %s\n",
-			stateColor.Render(pr.State),
+			stateColor.Render(string(pr.State)),
 			green.Render(fmt.Sprintf("+%d", pr.Additions)),
 			red.Render(fmt.Sprintf("-%d", pr.Deletions)),
 			dim.Render(fmt.Sprintf("%d files changed", pr.ChangedFiles)),

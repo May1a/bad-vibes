@@ -67,7 +67,7 @@ func printThread(t model.ReviewThread, anchorByThread map[string][]string, opts 
 	}
 
 	if opts.ShowDiff && t.Comments[0].DiffHunk != "" {
-		for _, hunkLine := range strings.Split(t.Comments[0].DiffHunk, "\n") {
+		for hunkLine := range strings.SplitSeq(t.Comments[0].DiffHunk, "\n") {
 			fmt.Println("  " + styleThreadHunk.Render(hunkLine))
 		}
 		fmt.Println()
@@ -83,7 +83,7 @@ func printThread(t model.ReviewThread, anchorByThread map[string][]string, opts 
 	if !opts.Verbose {
 		c := t.Comments[len(t.Comments)-1]
 		fmt.Println("  " + styleAuthor.Render("@"+c.Author) + "  " + styleDate.Render(formatDate(c.CreatedAt)))
-		for _, bodyLine := range strings.Split(previewBody(c.Body), "\n") {
+		for bodyLine := range strings.SplitSeq(previewBody(c.Body), "\n") {
 			fmt.Println("  " + bodyLine)
 		}
 		if len(t.Comments) > 1 {
@@ -97,7 +97,7 @@ func printThread(t model.ReviewThread, anchorByThread map[string][]string, opts 
 			fmt.Println()
 		}
 		fmt.Println("  " + styleAuthor.Render("@"+c.Author) + "  " + styleDate.Render(formatDate(c.CreatedAt)))
-		for _, bodyLine := range strings.Split(highlightAnchors(strings.TrimSpace(c.Body)), "\n") {
+		for bodyLine := range strings.SplitSeq(highlightAnchors(strings.TrimSpace(c.Body)), "\n") {
 			fmt.Println("  " + bodyLine)
 		}
 	}
@@ -179,19 +179,11 @@ func buildThreadSnippet(t model.ReviewThread, contextLines int) ([]snippetLine, 
 	}
 
 	hunk := patch.Files[0].Hunks[0]
-	targetIndex := findThreadSnippetTarget(t, hunk.Lines)
-	if targetIndex < 0 {
-		targetIndex = 0
-	}
+	highlightIndex := findThreadSnippetTarget(t, hunk.Lines)
+	centerIndex := max(highlightIndex, 0)
 
-	start := targetIndex - contextLines
-	if start < 0 {
-		start = 0
-	}
-	end := targetIndex + contextLines + 1
-	if end > len(hunk.Lines) {
-		end = len(hunk.Lines)
-	}
+	start := max(centerIndex-contextLines, 0)
+	end := min(centerIndex+contextLines+1, len(hunk.Lines))
 
 	lines := make([]snippetLine, 0, end-start)
 	for i := start; i < end; i++ {
@@ -201,7 +193,7 @@ func buildThreadSnippet(t model.ReviewThread, contextLines int) ([]snippetLine, 
 			Content:   line.Content,
 			OldLine:   line.OldLine,
 			NewLine:   line.NewLine,
-			Highlight: i == targetIndex,
+			Highlight: highlightIndex >= 0 && i == highlightIndex,
 		})
 	}
 	return lines, hunk.Header, true

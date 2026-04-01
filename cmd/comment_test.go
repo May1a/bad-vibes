@@ -1,9 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/may/bad-vibes/internal/github"
+	"github.com/may/bad-vibes/internal/model"
 )
 
 func TestReadCommentBody_BodyAndBodyFileConflict(t *testing.T) {
@@ -78,5 +83,67 @@ func TestParseCommentLocation(t *testing.T) {
 	}
 	if got.Path != "cmd/root.go" || got.Line != 42 {
 		t.Fatalf("unexpected location: %+v", got)
+	}
+}
+
+func TestWaitForPostedThreadRetriesUntilExactMatch(t *testing.T) {
+	prevLookup := findUnresolvedThreadByAt
+	prevSleep := sleepForAnchorRetry
+	t.Cleanup(func() {
+		findUnresolvedThreadByAt = prevLookup
+		sleepForAnchorRetry = prevSleep
+	})
+
+	calls := 0
+	findUnresolvedThreadByAt = func(_ *github.Client, _ context.Context, _ model.PRRef, path string, line int, body string) (string, bool, error) {
+		calls++
+		if calls == 3 {
+			return "thread-id", true, nil
+		}
+		return "", false, nil
+	}
+	sleepForAnchorRetry = func(_ time.Duration) {}
+
+	id, ok, err := waitForPostedThread(context.Background(), model.PRRef{}, "cmd/root.go", 42, "body")
+	if err != nil {
+		t.Fatalf("waitForPostedThread() error = %v", err)
+	}
+	if !ok || id != "thread-id" {
+		t.Fatalf("expected exact thread match, got ok=%v id=%q", ok, id)
+	}
+	if calls != 3 {
+		t.Fatalf("expected 3 lookup attempts, got %d", calls)
+	}
+}
+
+func TestStoreAnchorRequiresExactThreadMatch(t *testing.T) {
+	prevLookup := findUnresolvedThreadByAt
+	prevAddAnchor := addAnchorToCache
+	prevSleep := sleepForAnchorRetry
+	t.Cleanup(func() {
+		findUnresolvedThreadByAt = prevLookup
+		addAnchorToCache = prevAddAnchor
+		sleepForAnchorRetry = prevSleep
+	})
+
+	added := false
+	findUnresolvedThreadByAt = func(_ *github.Client, _ context.Context, _ model.PRRef, path string, line int, body string) (string, bool, error) {
+		return "", false, nil
+	}
+	addAnchorToCache = func(model.PRRef, model.Anchor) error {
+		added = true
+		return nil
+	}
+	sleepForAnchorRetry = func(_ time.Duration) {}
+
+	err := storeAnchor(context.Background(), model.PRRef{}, "perf", "cmd/root.go", 42, "body")
+	if err == nil {
+		t.Fatal("expected exact-match error")
+	}
+	if !strings.Contains(err.Error(), "exact thread") {
+		t.Fatalf("expected exact-match guidance, got %v", err)
+	}
+	if added {
+		t.Fatal("did not expect anchor to be cached without an exact thread match")
 	}
 }

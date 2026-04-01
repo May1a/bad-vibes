@@ -9,6 +9,14 @@ type PRRef struct {
 	Number int
 }
 
+type PRState string
+
+const (
+	PRStateOpen   PRState = "OPEN"
+	PRStateClosed PRState = "CLOSED"
+	PRStateMerged PRState = "MERGED"
+)
+
 // PR holds metadata fetched from the GitHub API.
 type PR struct {
 	ID           string // GraphQL node ID
@@ -16,7 +24,7 @@ type PR struct {
 	HeadRefName  string // branch name
 	Title        string
 	Body         string
-	State        string // OPEN | CLOSED | MERGED
+	State        PRState
 	Author       string
 	URL          string
 	Number       int

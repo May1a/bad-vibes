@@ -68,7 +68,7 @@ func TestPreflightCommentTarget_SuggestsOtherSide(t *testing.T) {
 	_, err := preflightCommentTarget(commentPreflightInput{
 		CommandPath: "bv comment",
 		RawPath:     "cmd/root.go",
-		Line:        11,
+		Line:        13,
 		Side:        "LEFT",
 		Patch:       patch,
 	})

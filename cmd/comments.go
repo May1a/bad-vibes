@@ -8,7 +8,6 @@ import (
 	"github.com/may/bad-vibes/internal/cache"
 	"github.com/may/bad-vibes/internal/display"
 	"github.com/may/bad-vibes/internal/github"
-	"github.com/may/bad-vibes/internal/model"
 	"github.com/spf13/cobra"
 )
 
@@ -23,18 +22,12 @@ var commentsCmd = &cobra.Command{
 	Short: "Show unresolved review comments",
 	Long: `Show unresolved review threads in a compact, readable form.
 
-By default this prints a short summary for each unresolved thread plus a code snippet.
+By default this prints one summary per unresolved thread plus a code snippet.
 Use --verbose to show every comment in the thread.
 Use --patch to include diff hunk context.
 
-Targeting:
-  Prefer --repo/--pr in scripts or outside a checkout.
-  If omitted, bv uses the current repo and the latest open PR on the current branch.
-
 Examples:
-  bv comments --repo owner/repo --pr 42
-  bv comments --pr 42
-  bv comments      # auto-detect from current branch
+  bv comments
   bv comments --verbose --patch`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -49,12 +42,7 @@ Examples:
 			return err
 		}
 
-		var unresolved []model.ReviewThread
-		for _, t := range threads {
-			if !t.IsResolved {
-				unresolved = append(unresolved, t)
-			}
-		}
+		unresolved := github.UnresolvedThreads(threads)
 
 		if len(unresolved) == 0 {
 			fmt.Println(lipgloss.NewStyle().Faint(true).Render("No unresolved threads."))

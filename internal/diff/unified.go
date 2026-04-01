@@ -3,6 +3,8 @@ package diff
 import (
 	"fmt"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -57,7 +59,8 @@ func ParseUnified(raw string) (Patch, error) {
 		newLine = 0
 	}
 
-	for _, rawLine := range strings.Split(raw, "\n") {
+	for rawLine := range strings.SplitSeq(raw, "\n") {
+		rawLine = strings.TrimSuffix(rawLine, "\r")
 		switch {
 		case strings.HasPrefix(rawLine, "diff --git "):
 			appendFile()
@@ -159,7 +162,7 @@ func (f File) ValidLines(side string) []int {
 			var candidate int
 			switch side {
 			case "LEFT":
-				if line.Kind != LineDelete {
+				if line.Kind == LineAdd {
 					continue
 				}
 				candidate = line.OldLine
@@ -183,12 +186,7 @@ func (f File) ValidLines(side string) []int {
 }
 
 func (f File) HasCommentLine(side string, line int) bool {
-	for _, candidate := range f.ValidLines(side) {
-		if candidate == line {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(f.ValidLines(side), line)
 }
 
 func trimDiffPath(raw string) string {
@@ -209,10 +207,9 @@ func pickDisplayPath(oldPath, newPath string) string {
 }
 
 func atoiOrZero(raw string) int {
-	n := 0
-	for _, r := range raw {
-		n *= 10
-		n += int(r - '0')
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0
 	}
 	return n
 }

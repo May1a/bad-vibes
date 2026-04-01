@@ -11,10 +11,10 @@ version: 0.2.0
 ## Core Concepts
 
 - **Auto-detection**: Repo-scoped commands auto-detect the current repo and branch from git, and default to the newest open PR on the current branch.
-- **PR reference formats**: Commands accept a bare number (`42`), cross-repo reference (`owner/repo#42`), or full GitHub URL.
+- **PR reference formats**: Use `--pr 42`, `--pr owner/repo#42`, or a full GitHub PR URL.
 - **Unresolved-only**: `bv comments` and `bv resolve` operate on unresolved threads. Resolved threads are silently excluded.
 - **Anchors**: Named bookmarks for threads (for example `#perf`) persist locally and resolve by file+line, not only by raw GraphQL ID.
-- **Direct commenting**: `bv comment` is a normal CLI command now, not a TUI flow. Pass `<file>:<line>` and the comment body explicitly.
+- **Direct commenting**: `bv comment` takes `<file>:<line>` plus the comment body.
 
 ## Commands at a Glance
 
@@ -24,8 +24,8 @@ version: 0.2.0
 | `bv summary` | Show PR metadata plus unresolved thread count and file stats |
 | `bv diff` | Show the colored unified diff |
 | `bv comments` | Show unresolved review threads |
-| `bv comment <file>:<line> [body]` | Post an inline comment directly from the CLI |
-| `bv resolve` | Resolve threads interactively or directly by ID/anchor |
+| `bv comment <file>:<line> [body]` | Post an inline comment directly |
+| `bv resolve` | Resolve the first unresolved thread, or resolve by ID/anchor with `--id` |
 | `bv anchors` | List saved anchor tags for a PR |
 
 ## Auth
@@ -39,13 +39,12 @@ Token resolution order:
 
 ### `bv comments`
 
-Default output is compact. It prints one summary per unresolved thread and includes a code snippet by default instead of dumping every comment body and full diff hunk.
+Default output is compact. It prints one summary per unresolved thread and includes a code snippet by default.
 
 Use:
 
 ```bash
 bv comments
-bv comments --pr 42
 bv comments --verbose
 bv comments --verbose --patch
 ```
@@ -64,13 +63,13 @@ When asked to inspect unresolved feedback, prefer starting with plain `bv commen
 Required inputs:
 
 - `<file>:<line>`
-- comment body via the optional 2nd argument, `--body TEXT`, `--body-file FILE`, or stdin
+- comment body via the optional 2nd argument, or alternatively `--body TEXT`, `--body-file FILE`, or stdin
 
 Examples:
 
 ```bash
 bv comment cmd/root.go:42 "Needs a guard here"
-bv comment --pr 42 cmd/root.go:42 --body-file ./comment.md --anchor perf
+bv comment cmd/root.go:42 --body-file ./comment.md --anchor perf
 printf 'Needs a guard here\n' | bv comment cmd/root.go:42
 ```
 
@@ -83,16 +82,16 @@ When asked to post a comment with `bv`, provide the `<file>:<line>` target expli
 
 ### `bv resolve`
 
-Two modes exist:
+Default behavior resolves the first unresolved thread in the same order shown by `bv comments`.
 
 ```bash
-bv resolve                    # interactive picker
+bv resolve                    # first unresolved thread
 bv resolve --id PRRT_abc123   # resolve by GraphQL node ID
 bv resolve --id #perf         # resolve by anchor tag
 bv resolve --id #PR           # resolve first unresolved PR-level thread
 ```
 
-Prefer direct `--id` resolution when the user already knows the target thread or anchor. Use interactive resolve only when selection from a list is actually needed.
+Prefer direct `--id` resolution when the user already knows the target thread or anchor.
 
 ## Anchors Workflow
 

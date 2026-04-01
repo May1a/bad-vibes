@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,10 +28,17 @@ var (
 )
 
 var (
-	fetchPRForComment        = github.FetchPR
+	fetchPRForComment        = github.FetchPRMetadata
 	fetchDiffForComment      = github.FetchDiff
 	postReviewComment        = github.PostReviewComment
 	findUnresolvedThreadByAt = github.FindUnresolvedThreadAt
+	addAnchorToCache         = cache.AddAnchor
+	sleepForAnchorRetry      = time.Sleep
+)
+
+const (
+	anchorLookupAttempts = 4
+	anchorLookupDelay    = 250 * time.Millisecond
 )
 
 var commentCmd = &cobra.Command{
@@ -42,16 +50,12 @@ Required input:
   <file>:<line>
   body from the optional 2nd argument, --body, --body-file, or stdin
 
-Targeting:
-  Prefer --repo/--pr in scripts or outside a checkout.
-  If omitted, bv uses the current repo and the latest open PR on the current branch.
-
 Examples:
-  bv comment --repo owner/repo --pr 42 cmd/root.go:42 "Needs a guard here"
-  bv comment --pr 42 cmd/root.go:42 --body-file ./comment.md --anchor perf
+  bv comment cmd/root.go:42 "Needs a guard here"
+  bv comment cmd/root.go:42 --body-file ./comment.md --anchor perf
   printf 'Needs a guard here\n' | bv comment cmd/root.go:42
-  bv comment --pr 42 cmd/root.go:42 "Old code path" --side LEFT
-  bv comment --pr 42 cmd/root.go:42 "Needs a guard here" --dry-run`,
+  bv comment cmd/root.go:42 "Old code path" --side LEFT
+  bv comment cmd/root.go:42 "Needs a guard here" --dry-run`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -80,7 +84,7 @@ Examples:
 		}
 		ref := target.Ref
 
-		pr, _, err := fetchPRForComment(ghClient, ctx, ref)
+		pr, err := fetchPRForComment(ghClient, ctx, ref)
 		if err != nil {
 			return err
 		}
@@ -157,13 +161,9 @@ func parseCommentLocation(commandPath, raw string) (commentLocation, error) {
 
 	path := strings.TrimSpace(raw[:idx])
 	lineText := strings.TrimSpace(raw[idx+1:])
-	line := 0
-	for _, r := range lineText {
-		if r < '0' || r > '9' {
-			return commentLocation{}, fmt.Errorf("could not build review comment\n  why: %q must end with a numeric line number\n  try: %s path/from/diff:42 \"comment\"", raw, commandPath)
-		}
-		line *= 10
-		line += int(r - '0')
+	line, err := strconv.Atoi(lineText)
+	if err != nil {
+		return commentLocation{}, fmt.Errorf("could not build review comment\n  why: %q must end with a numeric line number\n  try: %s path/from/diff:42 \"comment\"", raw, commandPath)
 	}
 	if path == "" || line < 1 {
 		return commentLocation{}, fmt.Errorf("could not build review comment\n  why: expected <file>:<line>, got %q\n  try: %s path/from/diff:42 \"comment\"", raw, commandPath)
@@ -235,19 +235,12 @@ func readCommentBody(args []string) (commentBodyInput, error) {
 }
 
 func storeAnchor(ctx context.Context, ref model.PRRef, tag, path string, line int, body string) error {
-	threadNodeID, ok, err := findUnresolvedThreadByAt(ghClient, ctx, ref, path, line, body)
+	threadNodeID, ok, err := waitForPostedThread(ctx, ref, path, line, body)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		// GitHub may normalize comment text; fall back to path+line when body match misses.
-		threadNodeID, ok, err = findUnresolvedThreadByAt(ghClient, ctx, ref, path, line, "")
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("the thread was not yet visible in GitHub after posting")
-		}
+		return fmt.Errorf("the exact thread was not yet visible in GitHub after posting")
 	}
 
 	anchor := model.Anchor{
@@ -258,7 +251,7 @@ func storeAnchor(ctx context.Context, ref model.PRRef, tag, path string, line in
 		Created:  time.Now(),
 		ThreadID: threadNodeID,
 	}
-	if err := cache.AddAnchor(ref, anchor); err != nil {
+	if err := addAnchorToCache(ref, anchor); err != nil {
 		return err
 	}
 
@@ -266,6 +259,28 @@ func storeAnchor(ctx context.Context, ref model.PRRef, tag, path string, line in
 		"⚓ anchor #" + tag + " saved",
 	))
 	return nil
+}
+
+func waitForPostedThread(ctx context.Context, ref model.PRRef, path string, line int, body string) (string, bool, error) {
+	for attempt := 0; attempt < anchorLookupAttempts; attempt++ {
+		threadNodeID, ok, err := findUnresolvedThreadByAt(ghClient, ctx, ref, path, line, body)
+		if err != nil {
+			return "", false, err
+		}
+		if ok {
+			return threadNodeID, true, nil
+		}
+		if attempt == anchorLookupAttempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return "", false, ctx.Err()
+		default:
+		}
+		sleepForAnchorRetry(anchorLookupDelay)
+	}
+	return "", false, nil
 }
 
 func printCommentDryRun(ref model.PRRef, target commentPreflightResult, body commentBodyInput) {

@@ -3,8 +3,6 @@ package github
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/may/bad-vibes/internal/model"
 )
@@ -24,12 +22,6 @@ query ListPRs($owner: String!, $repo: String!, $branch: String, $states: [PullRe
         title
         state
         headRefName
-        headRefOid
-        url
-        createdAt
-        additions
-        deletions
-        changedFiles
         author { login }
       }
     }
@@ -39,8 +31,7 @@ query ListPRs($owner: String!, $repo: String!, $branch: String, $states: [PullRe
 
 // FetchPRs lists PRs for the given repo.
 // branch: "" means all branches.
-// states: e.g. []string{"OPEN"} or []string{"CLOSED", "MERGED"}.
-func FetchPRs(client *Client, ctx context.Context, ref model.PRRef, branch string, states []string) ([]model.PR, error) {
+func FetchPRs(client *Client, ctx context.Context, ref model.PRRef, branch string, states []model.PRState) ([]model.PR, error) {
 	vars := map[string]any{
 		"owner":  ref.Owner,
 		"repo":   ref.Repo,
@@ -56,18 +47,12 @@ func FetchPRs(client *Client, ctx context.Context, ref model.PRRef, branch strin
 		Repository struct {
 			PullRequests struct {
 				Nodes []struct {
-					ID           string `json:"id"`
-					Number       int    `json:"number"`
-					Title        string `json:"title"`
-					State        string `json:"state"`
-					HeadRefName  string `json:"headRefName"`
-					HeadRefOid   string `json:"headRefOid"`
-					URL          string `json:"url"`
-					CreatedAt    string `json:"createdAt"`
-					Additions    int    `json:"additions"`
-					Deletions    int    `json:"deletions"`
-					ChangedFiles int    `json:"changedFiles"`
-					Author       struct {
+					ID          string `json:"id"`
+					Number      int    `json:"number"`
+					Title       string `json:"title"`
+					State       string `json:"state"`
+					HeadRefName string `json:"headRefName"`
+					Author      struct {
 						Login string `json:"login"`
 					} `json:"author"`
 				} `json:"nodes"`
@@ -82,20 +67,13 @@ func FetchPRs(client *Client, ctx context.Context, ref model.PRRef, branch strin
 	nodes := data.Repository.PullRequests.Nodes
 	prs := make([]model.PR, 0, len(nodes))
 	for _, n := range nodes {
-		ts, _ := time.Parse(time.RFC3339, n.CreatedAt)
-		_ = ts
 		prs = append(prs, model.PR{
-			ID:           n.ID,
-			HeadSHA:      n.HeadRefOid,
-			HeadRefName:  n.HeadRefName,
-			Title:        n.Title,
-			State:        n.State,
-			Author:       n.Author.Login,
-			URL:          n.URL,
-			Number:       n.Number,
-			ChangedFiles: n.ChangedFiles,
-			Additions:    n.Additions,
-			Deletions:    n.Deletions,
+			ID:          n.ID,
+			HeadRefName: n.HeadRefName,
+			Title:       n.Title,
+			State:       model.PRState(n.State),
+			Author:      n.Author.Login,
+			Number:      n.Number,
 		})
 	}
 	return prs, nil
@@ -103,7 +81,7 @@ func FetchPRs(client *Client, ctx context.Context, ref model.PRRef, branch strin
 
 // LatestOpenPR returns the most recent open PR for the given branch.
 func LatestOpenPR(client *Client, ctx context.Context, ref model.PRRef, branch string) (model.PR, error) {
-	prs, err := FetchPRs(client, ctx, ref, branch, []string{"OPEN"})
+	prs, err := FetchPRs(client, ctx, ref, branch, []model.PRState{model.PRStateOpen})
 	if err != nil {
 		return model.PR{}, err
 	}
@@ -117,24 +95,9 @@ func LatestOpenPR(client *Client, ctx context.Context, ref model.PRRef, branch s
 	return prs[0], nil
 }
 
-// StatesFromFlags converts --closed flag into a GraphQL states slice.
-func StatesFromFlags(closed bool) []string {
+func ListStates(closed bool) []model.PRState {
 	if closed {
-		return []string{"CLOSED", "MERGED"}
+		return []model.PRState{model.PRStateClosed, model.PRStateMerged}
 	}
-	return []string{"OPEN"}
-}
-
-// FormatState returns a short display string for a PR state.
-func FormatState(state string) string {
-	switch strings.ToUpper(state) {
-	case "OPEN":
-		return "open"
-	case "CLOSED":
-		return "closed"
-	case "MERGED":
-		return "merged"
-	default:
-		return strings.ToLower(state)
-	}
+	return []model.PRState{model.PRStateOpen}
 }

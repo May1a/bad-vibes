@@ -28,8 +28,8 @@ query FetchPR($owner: String!, $repo: String!, $number: Int!) {
 }
 `
 
-// FetchPR retrieves PR metadata via GraphQL.
-func FetchPR(client *Client, ctx context.Context, ref model.PRRef) (model.PR, []model.PRFile, error) {
+// FetchPRMetadata retrieves PR metadata via GraphQL.
+func FetchPRMetadata(client *Client, ctx context.Context, ref model.PRRef) (model.PR, error) {
 	var data struct {
 		Repository struct {
 			PullRequest struct {
@@ -57,33 +57,40 @@ func FetchPR(client *Client, ctx context.Context, ref model.PRRef) (model.PR, []
 		"number": ref.Number,
 	}, &data)
 	if err != nil {
-		return model.PR{}, nil, fmt.Errorf("fetching PR #%d metadata: %w", ref.Number, err)
+		return model.PR{}, fmt.Errorf("fetching PR #%d metadata: %w", ref.Number, err)
 	}
 
 	gql := data.Repository.PullRequest
-	pr := model.PR{
+	return model.PR{
 		ID:           gql.ID,
 		HeadSHA:      gql.HeadRefOid,
 		HeadRefName:  gql.HeadRefName,
 		Title:        gql.Title,
 		Body:         gql.Body,
-		State:        gql.State,
+		State:        model.PRState(gql.State),
 		Author:       gql.Author.Login,
 		URL:          gql.URL,
 		Number:       gql.Number,
 		ChangedFiles: gql.ChangedFiles,
 		Additions:    gql.Additions,
 		Deletions:    gql.Deletions,
-	}
+	}, nil
+}
 
-	files, err := fetchPRFiles(client, ctx, ref)
+// FetchPR retrieves PR metadata and changed-file stats.
+func FetchPR(client *Client, ctx context.Context, ref model.PRRef) (model.PR, []model.PRFile, error) {
+	pr, err := FetchPRMetadata(client, ctx, ref)
+	if err != nil {
+		return model.PR{}, nil, err
+	}
+	files, err := FetchPRFiles(client, ctx, ref)
 	if err != nil {
 		return model.PR{}, nil, err
 	}
 	return pr, files, nil
 }
 
-func fetchPRFiles(client *Client, ctx context.Context, ref model.PRRef) ([]model.PRFile, error) {
+func FetchPRFiles(client *Client, ctx context.Context, ref model.PRRef) ([]model.PRFile, error) {
 	type restFile struct {
 		Filename         string `json:"filename"`
 		PreviousFilename string `json:"previous_filename"`

@@ -18,16 +18,9 @@ var anchorsCmd = &cobra.Command{
 	Short: "List anchors for a PR",
 	Long: `List anchors for a pull request.
 
-This includes locally saved anchors plus tags discovered from unresolved
-thread bodies.
-
-Targeting:
-  Prefer --repo/--pr in scripts or outside a checkout.
-  If omitted, bv uses the current repo and the latest open PR on the current branch.
+This includes locally saved anchors plus tags discovered from unresolved thread bodies.
 
 Examples:
-  bv anchors --repo owner/repo --pr 42
-  bv anchors --pr 42
   bv anchors`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

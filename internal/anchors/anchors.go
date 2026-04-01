@@ -120,7 +120,7 @@ func discover(threads []model.ReviewThread) []model.Anchor {
 func extractTags(body string) []string {
 	tags := []string{}
 	seen := map[string]struct{}{}
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		match := reAnchorTag.FindStringSubmatch(line)
 		if len(match) != 2 {
 			continue

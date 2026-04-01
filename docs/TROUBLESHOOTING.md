@@ -136,15 +136,16 @@ curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit
 
 ## Comment/Thread Issues
 
-### "anchor not saved: could not resolve posted thread ID"
+### "anchor #perf was not saved"
 
 **Causes:**
 - Thread not yet visible in GraphQL API (eventual consistency)
-- Race condition between posting and fetching
+- Exact body match was not visible before the retry window expired
 
 **Solutions:**
-1. Wait a few seconds and try again
-2. Manually add anchor to cache file:
+1. Wait a few seconds and run `bv comments`
+2. Re-post the comment with `--anchor` if the thread is now visible
+3. Manually add anchor to cache file:
    ```sh
    # Edit ~/.cache/bad-vibes/owner/repo/pr-number.json
    ```
@@ -157,9 +158,10 @@ curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit
 
 **Solutions:**
 1. Include unique text in comment body when posting
-2. Use interactive mode to select correct thread:
+2. Inspect unresolved threads and resolve the exact one by ID:
    ```sh
-   bv resolve
+   bv comments
+   bv resolve --id PRRT_abc123
    ```
 
 ### "no unresolved thread found for anchor #perf"
@@ -181,36 +183,6 @@ curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit
    bv resolve --id PRRT_abc123
    ```
 
-## TUI Issues
-
-### "terminal not supported" or display issues
-
-**Causes:**
-- Terminal doesn't support ANSI colors
-- Terminal too small
-
-**Solutions:**
-1. Use a modern terminal (iTerm2, Alacritty, Kitty, etc.)
-2. Increase terminal size
-3. Set `TERM` environment variable:
-   ```sh
-   export TERM=xterm-256color
-   ```
-
-### TUI freezes or becomes unresponsive
-
-**Causes:**
-- Network timeout
-- Large PR with many threads
-
-**Solutions:**
-1. Press `Ctrl+C` to exit
-2. Check network connectivity
-3. Use non-interactive commands instead:
-   ```sh
-   bv comments --json  # If implemented
-   ```
-
 ## Performance Issues
 
 ### Slow command execution
@@ -223,7 +195,7 @@ curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit
 **Solutions:**
 1. Check your network connection
 2. Use specific PR number instead of auto-detect
-3. Filter threads in interactive mode
+3. Start with `bv comments` and only add `--verbose` or `--patch` when needed
 
 ### High memory usage
 

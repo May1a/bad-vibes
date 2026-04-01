@@ -43,7 +43,7 @@ Examples:
 		if base.Owner == "" || base.Repo == "" {
 			return fmt.Errorf("could not detect repository from git remote; ensure you're in a git repo with a GitHub remote")
 		}
-		states := github.StatesFromFlags(prsClosed)
+		states := github.ListStates(prsClosed)
 		if prsAllBranches && prsBranch != "" {
 			return fmt.Errorf("--all-branches and --branch are mutually exclusive")
 		}
@@ -101,7 +101,7 @@ Examples:
 			}
 
 			num := yellow.Render(fmt.Sprintf("#%-4d", pr.Number))
-			state := stateStyle.Render(fmt.Sprintf("%-7s", github.FormatState(pr.State)))
+			state := stateStyle.Render(fmt.Sprintf("%-7s", strings.ToLower(string(pr.State))))
 			branchCol := cyan.Render(pr.HeadRefName)
 			author := dim.Render("@" + pr.Author)
 			title := pr.Title

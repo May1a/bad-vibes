@@ -36,10 +36,10 @@ threads without the garbage that gh dumps by default.
 
 Targeting modes:
   Explicit:    bv summary --repo owner/repo --pr 42
-  Auto-detect: bv summary   # current repo + latest open PR on current branch`,
-	Example: `  bv summary --repo owner/repo --pr 42
-  bv comments --pr 42
-  bv comment --repo owner/repo --pr 42 cmd/root.go:42 "Needs a guard here"`,
+  Auto-detect: bv summary # latest open PR on current branch`,
+	Example: `  bv summary
+  bv comments
+  bv comment cmd/root.go:42 "Needs a guard here"`,
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if !requiresRepoContext(cmd) {

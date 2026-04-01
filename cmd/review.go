@@ -11,20 +11,13 @@ import (
 var diffTarget targetFlags
 
 var diffCmd = &cobra.Command{
-	Use:     "diff",
-	Aliases: []string{"show", "review"},
-	Short:   "Display the PR diff",
+	Use:   "diff",
+	Short: "Display the PR diff",
 	Long: `Display the PR diff with colored line numbers.
 
-Targeting:
-  Prefer --repo/--pr in scripts or outside a checkout.
-  If omitted, bv uses the current repo and the latest open PR on the current branch.
-
 Examples:
-  bv diff --repo owner/repo --pr 42
-  bv diff --pr 42
-  bv diff      # auto-detect from current branch
-  bv show --pr 42`,
+  bv diff
+  bv diff --pr 42`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()

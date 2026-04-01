@@ -52,7 +52,7 @@ func (m *MockClient) MockFetchPR(ctx context.Context, ref model.PRRef) (model.PR
 }
 
 // MockFetchPRs is a test helper that calls FetchPRs with the mock client.
-func (m *MockClient) MockFetchPRs(ctx context.Context, ref model.PRRef, branch string, states []string) ([]model.PR, error) {
+func (m *MockClient) MockFetchPRs(ctx context.Context, ref model.PRRef, branch string, states []model.PRState) ([]model.PR, error) {
 	m.FetchPRsCalls++
 	if m.FetchPRsErr != nil {
 		return nil, m.FetchPRsErr

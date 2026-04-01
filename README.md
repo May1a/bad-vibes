@@ -100,7 +100,6 @@ Coloured unified diff streamed to stdout.
 ```
 bv diff
 bv diff --pr 42
-bv show --pr 42
 ```
 
 Line numbers, additions in green, deletions in red, context in slate.
@@ -123,25 +122,20 @@ Post an inline review comment directly from the CLI.
 
 ```
 bv comment cmd/root.go:42 "Needs a guard here"
-bv comment --pr 42 cmd/root.go:42 --body-file ./comment.md --anchor perf
+bv comment cmd/root.go:42 --body-file ./comment.md --anchor perf
 printf 'Needs a guard here\n' | bv comment cmd/root.go:42
 ```
 
-Required inputs: `<file>:<line>` and a body via the optional 2nd argument, `--body`, `--body-file`, or stdin. If you set `--anchor`, `bv` re-fetches the thread list after posting to capture the live thread ID and saves the anchor locally.
+Required inputs: `<file>:<line>` and a body via the optional 2nd argument, `--body`, `--body-file`, or stdin. If you set `--anchor`, `bv` retries briefly until the exact posted thread is visible in GitHub and only then saves the anchor locally.
 
 ### `bv resolve`
 
 Resolve review threads.
 
-**Interactive mode** — pick from a list of unresolved threads:
-
-```
-bv resolve
-```
-
-**Direct mode** — resolve a specific thread without the TUI:
+Without `--id`, `bv resolve` resolves the first unresolved thread in the same order shown by `bv comments`.
 
 ```sh
+bv resolve
 bv resolve --id PRRT_abc123          # GraphQL node ID
 bv resolve --id #perf                # anchor tag (resolved by path+line lookup)
 bv resolve --id #PR                  # first unresolved PR-level thread
@@ -224,7 +218,6 @@ make build-all
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) - Internal design and data flow
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [API Scopes](docs/API_SCOPES.md) - Required GitHub permissions
 - [Contributing](CONTRIBUTING.md) - How to contribute

@@ -5,23 +5,41 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	anchorutil "github.com/may/bad-vibes/internal/anchors"
 	"github.com/may/bad-vibes/internal/cache"
+	"github.com/may/bad-vibes/internal/github"
 	"github.com/spf13/cobra"
 )
 
+var anchorsTarget targetFlags
+
 var anchorsCmd = &cobra.Command{
-	Use:   "anchors [PR]",
-	Short: "List local anchors for a PR",
-	Args:  cobra.MaximumNArgs(1),
+	Use:   "anchors",
+	Short: "List anchors for a PR",
+	Long: `List anchors for a pull request.
+
+This includes locally saved anchors plus tags discovered from unresolved thread bodies.
+
+Examples:
+  bv anchors`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ref, err := resolvePR(args)
+		target, err := resolveTarget(cmd, anchorsTarget)
 		if err != nil {
 			return err
 		}
-		anchors, err := cache.ListAnchors(ref)
+		ref := target.Ref
+		localAnchors, err := cache.ListAnchors(ref)
 		if err != nil {
 			return err
 		}
+
+		threads, err := github.FetchReviewThreads(ghClient, cmd.Context(), ref)
+		if err != nil && len(localAnchors) == 0 {
+			return err
+		}
+
+		anchors := anchorutil.Merge(localAnchors, threads)
 		if len(anchors) == 0 {
 			fmt.Println(lipgloss.NewStyle().Faint(true).Render("No anchors defined for this PR."))
 			return nil
@@ -52,4 +70,8 @@ var anchorsCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+func init() {
+	addTargetFlags(anchorsCmd, &anchorsTarget)
 }

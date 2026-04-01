@@ -12,7 +12,7 @@ const fetchThreadsQuery = `
 query FetchThreads($owner: String!, $repo: String!, $number: Int!, $after: String) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
-      reviewThreads(first: 50, after: $after) {
+      reviewThreads(first: 100, after: $after) {
         pageInfo { hasNextPage endCursor }
         nodes {
           id
@@ -32,6 +32,21 @@ query FetchThreads($owner: String!, $repo: String!, $number: Int!, $after: Strin
               author { login }
             }
           }
+        }
+      }
+    }
+  }
+}
+`
+
+const countThreadsQuery = `
+query CountThreads($owner: String!, $repo: String!, $number: Int!, $after: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          isResolved
         }
       }
     }
@@ -134,6 +149,57 @@ func FetchReviewThreads(client *Client, ctx context.Context, ref model.PRRef) ([
 	return allThreads, nil
 }
 
+// CountUnresolvedReviewThreads counts unresolved review threads using a lightweight query.
+func CountUnresolvedReviewThreads(client *Client, ctx context.Context, ref model.PRRef) (int, error) {
+	type gqlData struct {
+		Repository struct {
+			PullRequest struct {
+				ReviewThreads struct {
+					PageInfo struct {
+						HasNextPage bool   `json:"hasNextPage"`
+						EndCursor   string `json:"endCursor"`
+					} `json:"pageInfo"`
+					Nodes []struct {
+						IsResolved bool `json:"isResolved"`
+					} `json:"nodes"`
+				} `json:"reviewThreads"`
+			} `json:"pullRequest"`
+		} `json:"repository"`
+	}
+
+	var count int
+	var cursor *string
+
+	for {
+		vars := map[string]any{
+			"owner":  ref.Owner,
+			"repo":   ref.Repo,
+			"number": ref.Number,
+		}
+		if cursor != nil {
+			vars["after"] = *cursor
+		}
+
+		var data gqlData
+		if err := client.graphql(ctx, countThreadsQuery, vars, &data); err != nil {
+			return 0, fmt.Errorf("counting unresolved threads for PR #%d: %w", ref.Number, err)
+		}
+
+		rt := data.Repository.PullRequest.ReviewThreads
+		for _, t := range rt.Nodes {
+			if !t.IsResolved {
+				count++
+			}
+		}
+
+		if !rt.PageInfo.HasNextPage {
+			return count, nil
+		}
+		c := rt.PageInfo.EndCursor
+		cursor = &c
+	}
+}
+
 // FindUnresolvedThreadAt returns the GraphQL node ID of the unresolved thread at
 // the given file path and line number. Returns ("", false, nil) when no match is
 // found. Pass body to disambiguate multiple unresolved threads on the same line.
@@ -143,6 +209,29 @@ func FindUnresolvedThreadAt(client *Client, ctx context.Context, ref model.PRRef
 	if err != nil {
 		return "", false, err
 	}
+	return LookupUnresolvedThreadID(threads, path, line, body)
+}
+
+func UnresolvedThreads(threads []model.ReviewThread) []model.ReviewThread {
+	unresolved := make([]model.ReviewThread, 0, len(threads))
+	for _, t := range threads {
+		if !t.IsResolved {
+			unresolved = append(unresolved, t)
+		}
+	}
+	return unresolved
+}
+
+func FirstUnresolvedThread(threads []model.ReviewThread) (model.ReviewThread, bool) {
+	for _, t := range threads {
+		if !t.IsResolved {
+			return t, true
+		}
+	}
+	return model.ReviewThread{}, false
+}
+
+func LookupUnresolvedThreadID(threads []model.ReviewThread, path string, line int, body string) (string, bool, error) {
 	return findUnresolvedThreadID(threads, path, line, body)
 }
 

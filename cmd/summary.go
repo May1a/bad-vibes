@@ -3,42 +3,89 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/may/bad-vibes/internal/github"
+	"github.com/may/bad-vibes/internal/model"
 	"github.com/spf13/cobra"
 )
 
+var summaryTarget targetFlags
+
 var summaryCmd = &cobra.Command{
-	Use:   "summary [PR]",
+	Use:   "summary",
 	Short: "Show a tidy PR overview",
-	Long: `Show a tidy PR overview including title, author, state, diff stats, and unresolved thread count.
+	Long: `Show title, author, state, diff stats, unresolved thread count, and changed files.
 
 Examples:
-  bv summary       # auto-detect PR from current branch
-  bv summary 42    # show PR #42`,
-	Args: cobra.MaximumNArgs(1),
+  bv summary
+  bv summary --pr 42`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		ref, err := resolvePR(args)
+		target, err := resolveTarget(cmd, summaryTarget)
 		if err != nil {
 			return err
 		}
+		ref := target.Ref
 
-		pr, files, err := github.FetchPR(ghClient, ctx, ref)
-		if err != nil {
-			return err
-		}
-		threads, err := github.FetchReviewThreads(ghClient, ctx, ref)
-		if err != nil {
-			return err
-		}
-
-		unresolvedCount := 0
-		for _, t := range threads {
-			if !t.IsResolved {
-				unresolvedCount++
+		var (
+			pr              model.PR
+			files           []model.PRFile
+			unresolvedCount int
+			runErr          error
+			mu              sync.Mutex
+			wg              sync.WaitGroup
+		)
+		setErr := func(err error) {
+			if err == nil {
+				return
 			}
+			mu.Lock()
+			defer mu.Unlock()
+			if runErr == nil {
+				runErr = err
+			}
+		}
+
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			value, err := github.FetchPRMetadata(ghClient, ctx, ref)
+			if err != nil {
+				setErr(err)
+				return
+			}
+			mu.Lock()
+			pr = value
+			mu.Unlock()
+		}()
+		go func() {
+			defer wg.Done()
+			value, err := github.FetchPRFiles(ghClient, ctx, ref)
+			if err != nil {
+				setErr(err)
+				return
+			}
+			mu.Lock()
+			files = value
+			mu.Unlock()
+		}()
+		go func() {
+			defer wg.Done()
+			value, err := github.CountUnresolvedReviewThreads(ghClient, ctx, ref)
+			if err != nil {
+				setErr(err)
+				return
+			}
+			mu.Lock()
+			unresolvedCount = value
+			mu.Unlock()
+		}()
+		wg.Wait()
+		if runErr != nil {
+			return runErr
 		}
 
 		bold := lipgloss.NewStyle().Bold(true)
@@ -51,11 +98,11 @@ Examples:
 		fmt.Printf("%s  %s\n\n", dim.Render("by"), pr.Author)
 
 		stateColor := green
-		if pr.State != "OPEN" {
+		if pr.State != model.PRStateOpen {
 			stateColor = dim
 		}
 		fmt.Printf("  %s  %s  %s  %s\n",
-			stateColor.Render(pr.State),
+			stateColor.Render(string(pr.State)),
 			green.Render(fmt.Sprintf("+%d", pr.Additions)),
 			red.Render(fmt.Sprintf("-%d", pr.Deletions)),
 			dim.Render(fmt.Sprintf("%d files changed", pr.ChangedFiles)),
@@ -79,7 +126,7 @@ Examples:
 		if len(files) > 0 {
 			fmt.Println(dim.Render("Changed files:"))
 			for _, f := range files {
-				fmt.Println("  " + dim.Render("·") + " " + f)
+				fmt.Printf("  %s %s %s\n", dim.Render("·"), formatSummaryFileStatus(f), formatSummaryFileDelta(f))
 			}
 			fmt.Println()
 		}
@@ -87,4 +134,28 @@ Examples:
 		fmt.Println(dim.Render(pr.URL))
 		return nil
 	},
+}
+
+func init() {
+	addTargetFlags(summaryCmd, &summaryTarget)
+}
+
+func formatSummaryFileStatus(file model.PRFile) string {
+	label := "mod"
+	switch strings.ToLower(file.Status) {
+	case "added":
+		label = "new"
+	case "removed":
+		label = "del"
+	case "renamed":
+		label = "ren"
+	}
+	if strings.EqualFold(file.Status, "renamed") && file.PreviousPath != "" {
+		return fmt.Sprintf("[%s] %s -> %s", label, file.PreviousPath, file.Path)
+	}
+	return fmt.Sprintf("[%s] %s", label, file.Path)
+}
+
+func formatSummaryFileDelta(file model.PRFile) string {
+	return fmt.Sprintf("(+%d/-%d)", file.Additions, file.Deletions)
 }

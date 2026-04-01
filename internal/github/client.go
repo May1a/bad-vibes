@@ -102,11 +102,12 @@ func (e graphqlErrors) Error() string {
 	if len(e) == 0 {
 		return "unknown GraphQL error"
 	}
-	msg := e[0].Message
+	var msg strings.Builder
+	msg.WriteString(e[0].Message)
 	for _, err := range e[1:] {
-		msg += "; " + err.Message
+		msg.WriteString("; " + err.Message)
 	}
-	return msg
+	return msg.String()
 }
 
 // RateLimitInfo contains rate limit information from API responses.
@@ -168,7 +169,7 @@ func (c *Client) graphql(ctx context.Context, query string, variables map[string
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		if attempt > 0 {
 			backoff := calculateBackoff(attempt)
 			select {
@@ -275,7 +276,7 @@ func (c *Client) rest(ctx context.Context, method, path string, body any, v any,
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		if attempt > 0 {
 			backoff := calculateBackoff(attempt)
 			select {
@@ -374,10 +375,7 @@ func (c *Client) doREST(ctx context.Context, method, path string, bodyReader io.
 
 // calculateBackoff returns the backoff duration for a given attempt using exponential backoff.
 func calculateBackoff(attempt int) time.Duration {
-	backoff := initialBackoff * time.Duration(1<<uint(attempt-1))
-	if backoff > maxBackoff {
-		backoff = maxBackoff
-	}
+	backoff := min(initialBackoff*time.Duration(1<<uint(attempt-1)), maxBackoff)
 
 	// Add symmetric jitter (±10%) to avoid synchronized retries.
 	jitter := backoff / 10

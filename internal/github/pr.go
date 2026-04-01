@@ -3,7 +3,6 @@ package github
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/may/bad-vibes/internal/model"
 )
@@ -24,17 +23,13 @@ query FetchPR($owner: String!, $repo: String!, $number: Int!) {
       deletions
       changedFiles
       author { login }
-      files(first: 100) {
-        pageInfo { hasNextPage }
-        nodes { path }
-      }
     }
   }
 }
 `
 
-// FetchPR retrieves PR metadata via GraphQL.
-func FetchPR(client *Client, ctx context.Context, ref model.PRRef) (model.PR, []string, error) {
+// FetchPRMetadata retrieves PR metadata via GraphQL.
+func FetchPRMetadata(client *Client, ctx context.Context, ref model.PRRef) (model.PR, error) {
 	var data struct {
 		Repository struct {
 			PullRequest struct {
@@ -52,14 +47,6 @@ func FetchPR(client *Client, ctx context.Context, ref model.PRRef) (model.PR, []
 				Author       struct {
 					Login string `json:"login"`
 				} `json:"author"`
-				Files struct {
-					PageInfo struct {
-						HasNextPage bool `json:"hasNextPage"`
-					} `json:"pageInfo"`
-					Nodes []struct {
-						Path string `json:"path"`
-					} `json:"nodes"`
-				} `json:"files"`
 			} `json:"pullRequest"`
 		} `json:"repository"`
 	}
@@ -70,34 +57,69 @@ func FetchPR(client *Client, ctx context.Context, ref model.PRRef) (model.PR, []
 		"number": ref.Number,
 	}, &data)
 	if err != nil {
-		return model.PR{}, nil, fmt.Errorf("fetching PR #%d: %w", ref.Number, err)
+		return model.PR{}, fmt.Errorf("fetching PR #%d metadata: %w", ref.Number, err)
 	}
 
 	gql := data.Repository.PullRequest
-	pr := model.PR{
+	return model.PR{
 		ID:           gql.ID,
 		HeadSHA:      gql.HeadRefOid,
 		HeadRefName:  gql.HeadRefName,
 		Title:        gql.Title,
 		Body:         gql.Body,
-		State:        gql.State,
+		State:        model.PRState(gql.State),
 		Author:       gql.Author.Login,
 		URL:          gql.URL,
 		Number:       gql.Number,
 		ChangedFiles: gql.ChangedFiles,
 		Additions:    gql.Additions,
 		Deletions:    gql.Deletions,
-	}
+	}, nil
+}
 
-	files := make([]string, 0, len(gql.Files.Nodes))
-	for _, f := range gql.Files.Nodes {
-		files = append(files, f.Path)
+// FetchPR retrieves PR metadata and changed-file stats.
+func FetchPR(client *Client, ctx context.Context, ref model.PRRef) (model.PR, []model.PRFile, error) {
+	pr, err := FetchPRMetadata(client, ctx, ref)
+	if err != nil {
+		return model.PR{}, nil, err
 	}
-	if gql.Files.PageInfo.HasNextPage {
-		fmt.Fprintf(os.Stderr, "warning: PR has >100 changed files; file list is truncated\n")
+	files, err := FetchPRFiles(client, ctx, ref)
+	if err != nil {
+		return model.PR{}, nil, err
 	}
-
 	return pr, files, nil
+}
+
+func FetchPRFiles(client *Client, ctx context.Context, ref model.PRRef) ([]model.PRFile, error) {
+	type restFile struct {
+		Filename         string `json:"filename"`
+		PreviousFilename string `json:"previous_filename"`
+		Status           string `json:"status"`
+		Additions        int    `json:"additions"`
+		Deletions        int    `json:"deletions"`
+	}
+
+	var files []model.PRFile
+	for page := 1; ; page++ {
+		var payload []restFile
+		path := fmt.Sprintf("/repos/%s/%s/pulls/%d/files?per_page=100&page=%d", ref.Owner, ref.Repo, ref.Number, page)
+		if err := client.rest(ctx, "GET", path, nil, &payload, nil); err != nil {
+			return nil, fmt.Errorf("fetching PR #%d files: %w", ref.Number, err)
+		}
+		for _, file := range payload {
+			files = append(files, model.PRFile{
+				Path:         file.Filename,
+				PreviousPath: file.PreviousFilename,
+				Status:       file.Status,
+				Additions:    file.Additions,
+				Deletions:    file.Deletions,
+			})
+		}
+		if len(payload) < 100 {
+			break
+		}
+	}
+	return files, nil
 }
 
 // FetchDiff retrieves the unified diff for a PR via REST.

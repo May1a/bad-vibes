@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	reNumber  = regexp.MustCompile(`^\d+$`)
-	reShort   = regexp.MustCompile(`^([\w.\-]+)/([\w.\-]+)#(\d+)$`)
-	reURL     = regexp.MustCompile(`^https?://github\.com/([\w.\-]+)/([\w.\-]+)/pull/(\d+)`)
+	reNumber = regexp.MustCompile(`^\d+$`)
+	reShort  = regexp.MustCompile(`^([\w.\-]+)/([\w.\-]+)#(\d+)$`)
+	reURL    = regexp.MustCompile(`^https?://github\.com/([\w.\-]+)/([\w.\-]+)/pull/(\d+)`)
 )
 
 // ParseRef parses a PR reference string into a PRRef.

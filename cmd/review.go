@@ -8,21 +8,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var reviewCmd = &cobra.Command{
-	Use:   "review [PR]",
+var diffTarget targetFlags
+
+var diffCmd = &cobra.Command{
+	Use:   "diff",
 	Short: "Display the PR diff",
 	Long: `Display the PR diff with colored line numbers.
 
 Examples:
-  bv review      # auto-detect PR from current branch
-  bv review 42   # show diff for PR #42`,
-	Args: cobra.MaximumNArgs(1),
+  bv diff
+  bv diff --pr 42`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		ref, err := resolvePR(args)
+		target, err := resolveTarget(cmd, diffTarget)
 		if err != nil {
 			return err
 		}
+		ref := target.Ref
 		diff, err := github.FetchDiff(ghClient, ctx, ref)
 		if err != nil {
 			return err
@@ -34,4 +37,8 @@ Examples:
 		display.PrintDiff(diff)
 		return nil
 	},
+}
+
+func init() {
+	addTargetFlags(diffCmd, &diffTarget)
 }

@@ -9,6 +9,14 @@ type PRRef struct {
 	Number int
 }
 
+type PRState string
+
+const (
+	PRStateOpen   PRState = "OPEN"
+	PRStateClosed PRState = "CLOSED"
+	PRStateMerged PRState = "MERGED"
+)
+
 // PR holds metadata fetched from the GitHub API.
 type PR struct {
 	ID           string // GraphQL node ID
@@ -16,11 +24,20 @@ type PR struct {
 	HeadRefName  string // branch name
 	Title        string
 	Body         string
-	State        string // OPEN | CLOSED | MERGED
+	State        PRState
 	Author       string
 	URL          string
 	Number       int
 	ChangedFiles int
+	Additions    int
+	Deletions    int
+}
+
+// PRFile holds per-file diff stats for a PR.
+type PRFile struct {
+	Path         string
+	PreviousPath string
+	Status       string
 	Additions    int
 	Deletions    int
 }
@@ -49,11 +66,11 @@ type Comment struct {
 
 // Anchor is a user-defined local alias for a review thread.
 type Anchor struct {
-	Tag      string    // e.g. "perf" (without the #)
-	ThreadID string    // GraphQL node ID of the ReviewThread
-	Path     string    // file path for display convenience
+	Tag      string // e.g. "perf" (without the #)
+	ThreadID string // GraphQL node ID of the ReviewThread
+	Path     string // file path for display convenience
 	Line     int
-	Body     string    // first comment body snippet
+	Body     string // first comment body snippet
 	Created  time.Time
 }
 
@@ -63,7 +80,7 @@ type PRCache struct {
 	Owner   string
 	Repo    string
 	Number  int
-	PRID    string   // GraphQL node ID of the PR
-	HeadSHA string   // cached head commit OID
+	PRID    string // GraphQL node ID of the PR
+	HeadSHA string // cached head commit OID
 	Anchors []Anchor
 }

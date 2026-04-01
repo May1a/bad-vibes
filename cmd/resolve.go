@@ -5,137 +5,179 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	anchorutil "github.com/may/bad-vibes/internal/anchors"
 	"github.com/may/bad-vibes/internal/cache"
 	"github.com/may/bad-vibes/internal/github"
 	"github.com/may/bad-vibes/internal/model"
-	"github.com/may/bad-vibes/internal/tui"
 	"github.com/spf13/cobra"
 )
 
-var resolveID string
+var (
+	resolveID        string
+	resolveTargetCfg targetFlags
+)
+
+var (
+	fetchReviewThreadsForResolve = github.FetchReviewThreads
+	resolveThreadForResolve      = github.ResolveThread
+	listAnchorsForResolve        = cache.ListAnchors
+)
 
 var resolveCmd = &cobra.Command{
-	Use:   "resolve [PR]",
+	Use:   "resolve",
 	Short: "Resolve a review thread",
 	Long: `Mark a review thread as resolved.
 
-Without --id: launches an interactive list of unresolved threads.
-With --id: resolves the given thread ID (GraphQL node ID or #anchor-tag) directly.
+Without --id, resolves the first unresolved thread shown by bv comments.
+With --id, resolves the given thread ID (GraphQL node ID or #anchor-tag) directly.
 
 Examples:
-  bv resolve                    # interactive mode
-  bv resolve --id PRRT_abc123   # resolve by GraphQL node ID
-  bv resolve --id #perf         # resolve by anchor tag
-  bv resolve --id #PR           # resolve first unresolved PR-level thread`,
-	Args: cobra.MaximumNArgs(1),
+  bv resolve
+  bv resolve --pr 42 --id #perf
+  bv resolve --id PRRT_abc123`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		ref, err := resolvePR(args)
+		target, err := resolveTarget(cmd, resolveTargetCfg)
 		if err != nil {
 			return err
 		}
+		ref := target.Ref
 
 		green := lipgloss.NewStyle().Foreground(lipgloss.Color("#22c55e"))
 		dim := lipgloss.NewStyle().Faint(true)
 
-		if resolveID != "" {
-			threadID := resolveID
-			var resolveDesc string
-			// Support #anchor-tag and the special #PR shorthand for PR-level threads.
-			if strings.HasPrefix(threadID, "#") {
-				tag := strings.TrimPrefix(threadID, "#")
-
-				// #PR resolves the first unresolved PR-level thread (no path).
-				if strings.EqualFold(tag, "PR") {
-					id, ok, err := github.FindUnresolvedThreadAt(ghClient, ctx, ref, "", 0, "")
-					if err != nil {
-						return err
-					}
-					if !ok {
-						return fmt.Errorf("no unresolved PR-level thread found for PR #%d", ref.Number)
-					}
-					threadID = id
-					resolveDesc = "PR-level comment"
-				} else {
-					// Anchor lookup — symlink style: use path+line to find the live thread ID.
-					anchors, err := cache.ListAnchors(ref)
-					if err != nil {
-						return err
-					}
-					var anchor *model.Anchor
-					for i := range anchors {
-						if anchors[i].Tag == tag {
-							anchor = &anchors[i]
-							break
-						}
-					}
-					if anchor == nil {
-						return fmt.Errorf("no anchor %q found for PR #%d", resolveID, ref.Number)
-					}
-					// Resolve the live thread ID by location (symlink dereference).
-					id, ok, err := github.FindUnresolvedThreadAt(ghClient, ctx, ref, anchor.Path, anchor.Line, anchor.Body)
-					if err != nil {
-						return err
-					}
-					if !ok && anchor.Body != "" {
-						id, ok, err = github.FindUnresolvedThreadAt(ghClient, ctx, ref, anchor.Path, anchor.Line, "")
-						if err != nil {
-							return err
-						}
-					}
-					if ok {
-						threadID = id
-					} else if anchor.ThreadID != "" {
-						// Fallback: use whatever was stored (may fail, but worth trying).
-						threadID = anchor.ThreadID
-					} else {
-						return fmt.Errorf("no unresolved thread found for anchor %q", resolveID)
-					}
-					resolveDesc = fmt.Sprintf("%s:%d", anchor.Path, anchor.Line)
-				}
-			} else {
-				resolveDesc = threadID
-			}
-			fmt.Println(dim.Render("resolving: ") + resolveDesc)
-			if err := github.ResolveThread(ghClient, ctx, threadID); err != nil {
+		if resolveID != "" && !strings.HasPrefix(resolveID, "#") {
+			fmt.Println(dim.Render("resolving: ") + resolveID)
+			if err := resolveThreadForResolve(ghClient, ctx, resolveID); err != nil {
 				return err
 			}
 			fmt.Println(green.Render("✓") + " Thread resolved.")
 			return nil
 		}
 
-		// Interactive mode
-		threads, err := github.FetchReviewThreads(ghClient, ctx, ref)
-		if err != nil {
-			return err
-		}
-		var unresolved []model.ReviewThread
-		for _, t := range threads {
-			if !t.IsResolved {
-				unresolved = append(unresolved, t)
+		var localAnchors []model.Anchor
+		if strings.HasPrefix(resolveID, "#") {
+			localAnchors, err = listAnchorsForResolve(ref)
+			if err != nil {
+				return err
 			}
-		}
-		if len(unresolved) == 0 {
-			fmt.Println(lipgloss.NewStyle().Faint(true).Render("No unresolved threads."))
-			return nil
 		}
 
-		resolved, err := tui.RunResolveFlow(unresolved)
+		threads, err := fetchReviewThreadsForResolve(ghClient, ctx, ref)
 		if err != nil {
 			return err
 		}
-		if len(resolved) == 0 {
-			fmt.Println(lipgloss.NewStyle().Faint(true).Render("No threads resolved."))
-		} else {
-			for _, r := range resolved {
-				fmt.Println(green.Render("✓") + " " + r.Title)
-			}
-			fmt.Println(dim.Render(fmt.Sprintf("%d thread(s) resolved.", len(resolved))))
+
+		selection, err := resolveSelection(ref, resolveID, localAnchors, threads)
+		if err != nil {
+			return err
 		}
+		if selection.ThreadID == "" {
+			return fmt.Errorf("no unresolved threads found for PR #%d", ref.Number)
+		}
+
+		fmt.Println(dim.Render("resolving: ") + selection.Description)
+		if err := resolveThreadForResolve(ghClient, ctx, selection.ThreadID); err != nil {
+			return err
+		}
+		fmt.Println(green.Render("✓") + " Thread resolved.")
 		return nil
 	},
 }
 
+type resolveTargetSelection struct {
+	ThreadID    string
+	Description string
+}
+
+func resolveSelection(ref model.PRRef, rawID string, localAnchors []model.Anchor, threads []model.ReviewThread) (resolveTargetSelection, error) {
+	unresolved := github.UnresolvedThreads(threads)
+	if rawID == "" {
+		first, ok := github.FirstUnresolvedThread(unresolved)
+		if !ok {
+			return resolveTargetSelection{}, nil
+		}
+		return resolveTargetSelection{
+			ThreadID:    first.ID,
+			Description: threadLabel(first),
+		}, nil
+	}
+
+	if !strings.HasPrefix(rawID, "#") {
+		return resolveTargetSelection{
+			ThreadID:    rawID,
+			Description: rawID,
+		}, nil
+	}
+
+	tag := strings.TrimPrefix(rawID, "#")
+	if strings.EqualFold(tag, "PR") {
+		id, ok, err := github.LookupUnresolvedThreadID(unresolved, "", 0, "")
+		if err != nil {
+			return resolveTargetSelection{}, err
+		}
+		if !ok {
+			return resolveTargetSelection{}, fmt.Errorf("no unresolved PR-level thread found for PR #%d", ref.Number)
+		}
+		return resolveTargetSelection{
+			ThreadID:    id,
+			Description: "PR-level comment",
+		}, nil
+	}
+
+	anchor, err := anchorutil.Resolve(localAnchors, unresolved, tag)
+	if err != nil {
+		return resolveTargetSelection{}, fmt.Errorf("%w for PR #%d", err, ref.Number)
+	}
+
+	id, ok, err := github.LookupUnresolvedThreadID(unresolved, anchor.Path, anchor.Line, anchor.Body)
+	if err != nil {
+		return resolveTargetSelection{}, err
+	}
+	if !ok && anchor.ThreadID != "" && hasThreadID(unresolved, anchor.ThreadID) {
+		id = anchor.ThreadID
+		ok = true
+	}
+	if !ok {
+		return resolveTargetSelection{}, fmt.Errorf("no unresolved thread found for anchor %q", rawID)
+	}
+	return resolveTargetSelection{
+		ThreadID:    id,
+		Description: formatAnchorLocation(anchor),
+	}, nil
+}
+
+func hasThreadID(threads []model.ReviewThread, threadID string) bool {
+	for _, thread := range threads {
+		if thread.ID == threadID && !thread.IsResolved {
+			return true
+		}
+	}
+	return false
+}
+
+func threadLabel(thread model.ReviewThread) string {
+	if thread.Path == "" {
+		return "PR-level comment"
+	}
+	if thread.Line > 0 {
+		return fmt.Sprintf("%s:%d", thread.Path, thread.Line)
+	}
+	return thread.Path
+}
+
+func formatAnchorLocation(anchor model.Anchor) string {
+	if anchor.Path == "" {
+		return "PR-level comment"
+	}
+	if anchor.Line > 0 {
+		return fmt.Sprintf("%s:%d", anchor.Path, anchor.Line)
+	}
+	return anchor.Path
+}
+
 func init() {
-	resolveCmd.Flags().StringVar(&resolveID, "id", "", "Thread ID (GraphQL node ID or #anchor-tag) to resolve without TUI")
+	addTargetFlags(resolveCmd, &resolveTargetCfg)
+	resolveCmd.Flags().StringVar(&resolveID, "id", "", "Thread ID (GraphQL node ID or #anchor-tag)")
 }

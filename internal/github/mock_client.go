@@ -13,27 +13,27 @@ type MockClient struct {
 	// PR to return from FetchPR
 	MockPR model.PR
 	// Files to return from FetchPR
-	MockFiles []string
+	MockFiles []model.PRFile
 	// Threads to return from FetchReviewThreads
 	MockThreads []model.ReviewThread
 	// Diff to return from FetchDiff
 	MockDiff string
 
 	// Errors to return
-	FetchPRErr      error
-	FetchPRsErr     error
-	FetchThreadsErr error
-	FetchDiffErr    error
+	FetchPRErr       error
+	FetchPRsErr      error
+	FetchThreadsErr  error
+	FetchDiffErr     error
 	ResolveThreadErr error
-	PostCommentErr  error
+	PostCommentErr   error
 
 	// Call tracking
-	FetchPRCalls      int
-	FetchPRsCalls     int
-	FetchThreadsCalls int
-	FetchDiffCalls    int
+	FetchPRCalls       int
+	FetchPRsCalls      int
+	FetchThreadsCalls  int
+	FetchDiffCalls     int
 	ResolveThreadCalls int
-	PostCommentCalls  int
+	PostCommentCalls   int
 
 	// PostedComment to return from PostReviewComment
 	MockPostedComment PostedComment
@@ -43,7 +43,7 @@ type MockClient struct {
 // Note: We use package-level functions that accept *Client, so we provide test helpers
 
 // MockFetchPR is a test helper that calls FetchPR with the mock client.
-func (m *MockClient) MockFetchPR(ctx context.Context, ref model.PRRef) (model.PR, []string, error) {
+func (m *MockClient) MockFetchPR(ctx context.Context, ref model.PRRef) (model.PR, []model.PRFile, error) {
 	m.FetchPRCalls++
 	if m.FetchPRErr != nil {
 		return model.PR{}, nil, m.FetchPRErr
@@ -52,7 +52,7 @@ func (m *MockClient) MockFetchPR(ctx context.Context, ref model.PRRef) (model.PR
 }
 
 // MockFetchPRs is a test helper that calls FetchPRs with the mock client.
-func (m *MockClient) MockFetchPRs(ctx context.Context, ref model.PRRef, branch string, states []string) ([]model.PR, error) {
+func (m *MockClient) MockFetchPRs(ctx context.Context, ref model.PRRef, branch string, states []model.PRState) ([]model.PR, error) {
 	m.FetchPRsCalls++
 	if m.FetchPRsErr != nil {
 		return nil, m.FetchPRsErr
@@ -101,7 +101,7 @@ func NewMockClient() *MockClient {
 	return &MockClient{
 		MockPRs:     []model.PR{},
 		MockThreads: []model.ReviewThread{},
-		MockFiles:   []string{},
+		MockFiles:   []model.PRFile{},
 		MockPostedComment: PostedComment{
 			ReviewID:  1,
 			CommentID: 1,

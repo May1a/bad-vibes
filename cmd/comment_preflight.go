@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -80,10 +81,8 @@ func pathCandidates(raw, workingDir, repoRoot string) []string {
 		if path == "." || path == "" {
 			return
 		}
-		for _, existing := range candidates {
-			if existing == path {
-				return
-			}
+		if slices.Contains(candidates, path) {
+			return
 		}
 		candidates = append(candidates, path)
 	}
@@ -154,13 +153,7 @@ func suggestPaths(raw string, changedFiles []string) []string {
 	})
 	paths := make([]string, 0, len(matches))
 	for _, match := range matches {
-		duplicate := false
-		for _, existing := range paths {
-			if existing == match.path {
-				duplicate = true
-				break
-			}
-		}
+		duplicate := slices.Contains(paths, match.path)
 		if !duplicate {
 			paths = append(paths, match.path)
 		}

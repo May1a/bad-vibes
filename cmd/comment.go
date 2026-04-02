@@ -262,7 +262,7 @@ func storeAnchor(ctx context.Context, ref model.PRRef, tag, path string, line in
 }
 
 func waitForPostedThread(ctx context.Context, ref model.PRRef, path string, line int, body string) (string, bool, error) {
-	for attempt := 0; attempt < anchorLookupAttempts; attempt++ {
+	for attempt := range anchorLookupAttempts {
 		threadNodeID, ok, err := findUnresolvedThreadByAt(ghClient, ctx, ref, path, line, body)
 		if err != nil {
 			return "", false, err

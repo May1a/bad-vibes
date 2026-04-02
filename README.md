@@ -16,10 +16,16 @@ A focused CLI for human-in-the-loop AI PR review.
 
 ## Install
 
-**From source (requires Go 1.21+):**
+**Install with `go install` (requires Go 1.21+):**
 
 ```sh
-git clone https://github.com/May1a/bad-vibes
+go install github.com/may1a/bad-vibes@main
+```
+
+**From source:**
+
+```sh
+git clone https://github.com/may1a/bad-vibes
 cd bad-vibes
 make install   # installs bv to $GOPATH/bin
 ```
@@ -39,7 +45,7 @@ make build-all # outputs to dist/
 **As a `skills.sh` skill:**
 
 ```sh
-npx skills add https://github.com/May1a/bad-vibes --skill bv
+npx skills add https://github.com/may1a/bad-vibes --skill bv
 ```
 
 ---

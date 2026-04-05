@@ -8,10 +8,21 @@ import (
 	anchorutil "github.com/may/bad-vibes/internal/anchors"
 	"github.com/may/bad-vibes/internal/cache"
 	"github.com/may/bad-vibes/internal/github"
+	"github.com/may/bad-vibes/internal/model"
 	"github.com/spf13/cobra"
 )
 
 var anchorsTarget targetFlags
+
+func mergeAnchorsForDisplay(localAnchors []model.Anchor, threads []model.ReviewThread, threadsErr error) ([]model.Anchor, string, error) {
+	if threadsErr != nil {
+		if len(localAnchors) == 0 {
+			return nil, "", threadsErr
+		}
+		return localAnchors, fmt.Sprintf("warning: could not refresh review threads; showing local anchors only: %v", threadsErr), nil
+	}
+	return anchorutil.Merge(localAnchors, threads), "", nil
+}
 
 var anchorsCmd = &cobra.Command{
 	Use:   "anchors",
@@ -35,11 +46,13 @@ Examples:
 		}
 
 		threads, err := github.FetchReviewThreads(ghClient, cmd.Context(), ref)
-		if err != nil && len(localAnchors) == 0 {
+		anchors, warning, err := mergeAnchorsForDisplay(localAnchors, threads, err)
+		if err != nil {
 			return err
 		}
-
-		anchors := anchorutil.Merge(localAnchors, threads)
+		if warning != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), lipgloss.NewStyle().Faint(true).Render(warning))
+		}
 		if len(anchors) == 0 {
 			fmt.Println(lipgloss.NewStyle().Faint(true).Render("No anchors defined for this PR."))
 			return nil

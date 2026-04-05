@@ -76,3 +76,13 @@ func TestResolveTargetInput_MissingRepoContext(t *testing.T) {
 		t.Fatalf("expected actionable hint, got %v", err)
 	}
 }
+
+func TestSplitRepoRejectsMalformedValue(t *testing.T) {
+	_, _, err := splitRepo("owner-only")
+	if err == nil {
+		t.Fatal("expected malformed repo error")
+	}
+	if !strings.Contains(err.Error(), "expected owner/repo") {
+		t.Fatalf("expected owner/repo guidance, got %v", err)
+	}
+}

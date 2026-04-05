@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/may/bad-vibes/internal/diff"
+	"github.com/may1a/bad-vibes/internal/diff"
 )
 
 type commentBodyInput struct {

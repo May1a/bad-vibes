@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/may/bad-vibes/internal/diff"
-	"github.com/may/bad-vibes/internal/model"
+	"github.com/may1a/bad-vibes/internal/diff"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 var (

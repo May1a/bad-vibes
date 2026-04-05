@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/may/bad-vibes/internal/github"
-	"github.com/may/bad-vibes/internal/model"
+	"github.com/may1a/bad-vibes/internal/github"
+	"github.com/may1a/bad-vibes/internal/model"
 	"github.com/spf13/cobra"
 )
 

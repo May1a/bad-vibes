@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/may/bad-vibes/internal/git"
-	"github.com/may/bad-vibes/internal/github"
-	"github.com/may/bad-vibes/internal/model"
+	"github.com/may1a/bad-vibes/internal/git"
+	"github.com/may1a/bad-vibes/internal/github"
+	"github.com/may1a/bad-vibes/internal/model"
 	"github.com/spf13/cobra"
 )
 

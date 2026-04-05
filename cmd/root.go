@@ -3,8 +3,8 @@ package cmd
 import (
 	"os"
 
-	"github.com/may/bad-vibes/internal/auth"
-	"github.com/may/bad-vibes/internal/github"
+	"github.com/may1a/bad-vibes/internal/auth"
+	"github.com/may1a/bad-vibes/internal/github"
 	"github.com/spf13/cobra"
 )
 

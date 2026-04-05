@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/may/bad-vibes/internal/model"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 func cachePath(ref model.PRRef) (string, error) {

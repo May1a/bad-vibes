@@ -3,7 +3,7 @@ package github
 import (
 	"testing"
 
-	"github.com/may/bad-vibes/internal/model"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 func TestListStates(t *testing.T) {

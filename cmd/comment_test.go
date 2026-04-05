@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/may/bad-vibes/internal/github"
-	"github.com/may/bad-vibes/internal/model"
+	"github.com/may1a/bad-vibes/internal/github"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 func TestReadCommentBody_BodyAndBodyFileConflict(t *testing.T) {

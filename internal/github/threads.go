@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/may1a/bv/internal/model"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 const fetchThreadsQuery = `

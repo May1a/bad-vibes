@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/may1a/bv/internal/model"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 // PostedComment holds identifiers returned after posting a review comment.

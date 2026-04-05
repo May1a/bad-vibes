@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/may1a/bv/internal/diff"
+	"github.com/may1a/bad-vibes/internal/diff"
 )
 
 var (

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/may1a/bv/internal/model"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 var reAnchorTag = regexp.MustCompile(`^\s*(?:[#>*-]\s+)?#([A-Za-z][\w-]*)\b`)

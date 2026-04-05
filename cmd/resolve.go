@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	anchorutil "github.com/may1a/bv/internal/anchors"
-	"github.com/may1a/bv/internal/cache"
-	"github.com/may1a/bv/internal/github"
-	"github.com/may1a/bv/internal/model"
+	anchorutil "github.com/may1a/bad-vibes/internal/anchors"
+	"github.com/may1a/bad-vibes/internal/cache"
+	"github.com/may1a/bad-vibes/internal/github"
+	"github.com/may1a/bad-vibes/internal/model"
 	"github.com/spf13/cobra"
 )
 

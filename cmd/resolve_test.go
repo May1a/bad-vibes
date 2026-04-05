@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/may1a/bv/internal/model"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 func TestResolveSelectionWithoutIDUsesFirstUnresolvedThread(t *testing.T) {

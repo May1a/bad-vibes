@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/may1a/bv/internal/model"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 func TestMergeAnchorsForDisplay_FallsBackToLocalAnchorsWithWarning(t *testing.T) {

@@ -3,7 +3,7 @@ package github
 import (
 	"context"
 
-	"github.com/may1a/bv/internal/model"
+	"github.com/may1a/bad-vibes/internal/model"
 )
 
 // MockClient is a test double for Client that returns predefined responses.

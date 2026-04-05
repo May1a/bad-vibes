@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/may1a/bv/internal/display"
-	"github.com/may1a/bv/internal/github"
+	"github.com/may1a/bad-vibes/internal/display"
+	"github.com/may1a/bad-vibes/internal/github"
 	"github.com/spf13/cobra"
 )
 

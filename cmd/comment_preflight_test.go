@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/may1a/bv/internal/diff"
+	"github.com/may1a/bad-vibes/internal/diff"
 )
 
 const sampleCommentDiff = `diff --git a/cmd/root.go b/cmd/root.go

@@ -221,7 +221,9 @@ func (c *Client) doGraphQL(ctx context.Context, body []byte, v any) error {
 		}
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	rateLimit := extractRateLimit(resp)
 
@@ -340,7 +342,9 @@ func (c *Client) doREST(ctx context.Context, method, path string, bodyReader io.
 		}
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	rateLimit := extractRateLimit(resp)
 

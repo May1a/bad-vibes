@@ -9,13 +9,11 @@ import (
 )
 
 var (
-	bvVersion string
-	ghClient  *github.Client
+	ghClient *github.Client
 )
 
 // SetVersion is called from main.go with the ldflags-injected version string.
 func SetVersion(v string) {
-	bvVersion = v
 	rootCmd.Version = v
 }
 

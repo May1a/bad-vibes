@@ -83,7 +83,7 @@ func TestClient_RateLimitHandling(t *testing.T) {
 	w.Header().Set("X-RateLimit-Reset", "9999999999")
 	w.WriteHeader(http.StatusForbidden)
 	if _, err := w.Write([]byte(`{"message": "rate limited"}`)); err != nil {
-		t.Fatalf("expected write to succeed, got %v", err)
+		t.Fatalf("writing response body: %v", err)
 	}
 
 	resp := w.Result()

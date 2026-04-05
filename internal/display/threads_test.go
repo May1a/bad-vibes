@@ -3,7 +3,7 @@ package display
 import (
 	"testing"
 
-	"github.com/may1a/bad-vibes/internal/model"
+	"github.com/may1a/bv/internal/model"
 )
 
 func TestBuildThreadSnippet_HighlightsTargetLine(t *testing.T) {

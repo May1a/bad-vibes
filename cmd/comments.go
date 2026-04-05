@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
-	anchorutil "github.com/may1a/bad-vibes/internal/anchors"
-	"github.com/may1a/bad-vibes/internal/cache"
-	"github.com/may1a/bad-vibes/internal/display"
-	"github.com/may1a/bad-vibes/internal/github"
+	anchorutil "github.com/may1a/bv/internal/anchors"
+	"github.com/may1a/bv/internal/cache"
+	"github.com/may1a/bv/internal/display"
+	"github.com/may1a/bv/internal/github"
 	"github.com/spf13/cobra"
 )
 

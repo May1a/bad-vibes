@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/may1a/bad-vibes/internal/cache"
-	"github.com/may1a/bad-vibes/internal/diff"
-	"github.com/may1a/bad-vibes/internal/git"
-	"github.com/may1a/bad-vibes/internal/github"
-	"github.com/may1a/bad-vibes/internal/model"
+	"github.com/may1a/bv/internal/cache"
+	"github.com/may1a/bv/internal/diff"
+	"github.com/may1a/bv/internal/git"
+	"github.com/may1a/bv/internal/github"
+	"github.com/may1a/bv/internal/model"
 	"github.com/spf13/cobra"
 )
 

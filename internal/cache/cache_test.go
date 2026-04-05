@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/may1a/bad-vibes/internal/model"
+	"github.com/may1a/bv/internal/model"
 )
 
 func TestCache_LoadNonExistent(t *testing.T) {

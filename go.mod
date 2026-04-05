@@ -1,4 +1,4 @@
-module github.com/may1a/bad-vibes
+module github.com/may1a/bv
 
 go 1.25.0
 

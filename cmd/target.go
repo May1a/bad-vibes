@@ -5,10 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/may1a/bad-vibes/internal/git"
-	"github.com/may1a/bad-vibes/internal/github"
-	"github.com/may1a/bad-vibes/internal/model"
-	"github.com/may1a/bad-vibes/internal/parse"
+	"github.com/may1a/bv/internal/git"
+	"github.com/may1a/bv/internal/github"
+	"github.com/may1a/bv/internal/model"
+	"github.com/may1a/bv/internal/parse"
 	"github.com/spf13/cobra"
 )
 

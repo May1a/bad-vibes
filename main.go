@@ -1,6 +1,6 @@
 package main
 
-import "github.com/may1a/bad-vibes/cmd"
+import "github.com/may1a/bv/cmd"
 
 var version = "dev"
 

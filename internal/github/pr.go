@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/may1a/bad-vibes/internal/model"
+	"github.com/may1a/bv/internal/model"
 )
 
 const fetchPRQuery = `

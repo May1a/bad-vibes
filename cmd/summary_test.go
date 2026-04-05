@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/may1a/bad-vibes/internal/model"
+	"github.com/may1a/bv/internal/model"
 )
 
 func TestFormatSummaryFileStatus(t *testing.T) {

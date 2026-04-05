@@ -3,7 +3,7 @@ package parse
 import (
 	"testing"
 
-	"github.com/may1a/bad-vibes/internal/model"
+	"github.com/may1a/bv/internal/model"
 )
 
 func TestParseRef(t *testing.T) {
@@ -32,12 +32,12 @@ func TestParseRef(t *testing.T) {
 		},
 		{
 			name: "full URL https",
-			raw:  "https://github.com/may1a/bad-vibes/pull/99",
+			raw:  "https://github.com/may1a/bv/pull/99",
 			want: model.PRRef{Owner: "may1a", Repo: "bad-vibes", Number: 99},
 		},
 		{
 			name: "full URL http",
-			raw:  "http://github.com/may1a/bad-vibes/pull/3",
+			raw:  "http://github.com/may1a/bv/pull/3",
 			want: model.PRRef{Owner: "may1a", Repo: "bad-vibes", Number: 3},
 		},
 		{

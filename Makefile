@@ -1,5 +1,5 @@
 BIN     := bv
-MODULE  := github.com/may1a/bad-vibes
+MODULE  := github.com/may1a/bv
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION) -s -w"
 

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(git *)",
-      "Bash(xargs *)"
+      "Bash(xargs *)",
+      "Bash(go *)"
     ]
   },
   "$version": 3

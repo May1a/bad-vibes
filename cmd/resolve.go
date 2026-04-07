@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -29,12 +30,13 @@ var resolveCmd = &cobra.Command{
 	Long: `Mark a review thread as resolved.
 
 Without --id, resolves the first unresolved thread shown by bv comments.
-With --id, resolves the given thread ID (GraphQL node ID or #anchor-tag) directly.
+With --id, resolves the given thread ID (GraphQL node ID, #anchor-tag, or numeric index) directly.
 
 Examples:
   bv resolve
   bv resolve --pr 42 --id #perf
-  bv resolve --id PRRT_abc123`,
+  bv resolve --id PRRT_abc123
+  bv resolve --id 1`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -46,6 +48,26 @@ Examples:
 
 		green := lipgloss.NewStyle().Foreground(lipgloss.Color("#22c55e"))
 		dim := lipgloss.NewStyle().Faint(true)
+
+		if isNumericIndex(resolveID) {
+			threads, err := fetchReviewThreadsForResolve(ghClient, ctx, ref)
+			if err != nil {
+				return err
+			}
+			unresolved := github.UnresolvedThreads(threads)
+			idx, _ := strconv.Atoi(resolveID)
+			if idx < 1 || idx > len(unresolved) {
+				return fmt.Errorf("thread index #%d out of range (1–%d)", idx, len(unresolved))
+			}
+			t := unresolved[idx-1]
+			loc := threadLabelWithTitle(t)
+			fmt.Println(dim.Render("resolving: ") + loc)
+			if err := resolveThreadForResolve(ghClient, ctx, t.ID); err != nil {
+				return err
+			}
+			fmt.Println(green.Render("✓") + " Resolved " + loc)
+			return nil
+		}
 
 		if resolveID != "" && !strings.HasPrefix(resolveID, "#") {
 			fmt.Println(dim.Render("resolving: ") + resolveID)
@@ -81,7 +103,7 @@ Examples:
 		if err := resolveThreadForResolve(ghClient, ctx, selection.ThreadID); err != nil {
 			return err
 		}
-		fmt.Println(green.Render("✓") + " Thread resolved.")
+		fmt.Println(green.Render("✓") + " Resolved " + selection.Description)
 		return nil
 	},
 }
@@ -100,7 +122,7 @@ func resolveSelection(ref model.PRRef, rawID string, localAnchors []model.Anchor
 		}
 		return resolveTargetSelection{
 			ThreadID:    first.ID,
-			Description: threadLabel(first),
+			Description: threadLabelWithTitle(first),
 		}, nil
 	}
 
@@ -179,5 +201,39 @@ func formatAnchorLocation(anchor model.Anchor) string {
 
 func init() {
 	addTargetFlags(resolveCmd, &resolveTargetCfg)
-	resolveCmd.Flags().StringVar(&resolveID, "id", "", "Thread ID (GraphQL node ID or #anchor-tag)")
+	resolveCmd.Flags().StringVar(&resolveID, "id", "", "Thread ID (GraphQL node ID, #anchor-tag, or numeric index)")
+}
+
+func isNumericIndex(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func threadLabelWithTitle(t model.ReviewThread) string {
+	loc := threadLabel(t)
+	if len(t.Comments) > 0 {
+		body := t.Comments[0].Body
+		if title := extractFirstBoldTitle(body); title != "" {
+			return fmt.Sprintf("%s — %q", loc, title)
+		}
+	}
+	return loc
+}
+
+func extractFirstBoldTitle(body string) string {
+	lines := strings.Split(body, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if len(trimmed) > 4 && strings.HasPrefix(trimmed, "**") && strings.HasSuffix(trimmed, "**") {
+			return strings.TrimSuffix(strings.TrimPrefix(trimmed, "**"), "**")
+		}
+	}
+	return ""
 }

@@ -1,6 +1,7 @@
 package display
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/may1a/bad-vibes/internal/model"
@@ -59,5 +60,18 @@ func TestBuildThreadSnippet_DoesNotHighlightMissingTarget(t *testing.T) {
 		if line.Highlight {
 			t.Fatal("did not expect any highlighted line when target is missing")
 		}
+	}
+}
+
+func TestPreviewBody_DoesNotTruncateLongComments(t *testing.T) {
+	body := strings.Repeat("long comment body ", 20)
+
+	got := previewBody(body)
+
+	if strings.Contains(got, "...") {
+		t.Fatalf("expected full comment body without truncation, got %q", got)
+	}
+	if got != strings.TrimSpace(body) {
+		t.Fatalf("expected preview body to keep the full normalized text, got %q", got)
 	}
 }

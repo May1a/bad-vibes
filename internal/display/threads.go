@@ -123,10 +123,6 @@ func formatDate(ts time.Time) string {
 func previewBody(body string) string {
 	body = strings.Join(strings.Fields(strings.TrimSpace(body)), " ")
 	body = highlightAnchors(body)
-	runes := []rune(body)
-	if len(runes) > 180 {
-		return string(runes[:177]) + "..."
-	}
 	return body
 }
 

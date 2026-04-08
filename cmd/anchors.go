@@ -51,7 +51,7 @@ Examples:
 			return err
 		}
 		if warning != "" {
-			fmt.Fprintln(cmd.ErrOrStderr(), lipgloss.NewStyle().Faint(true).Render(warning))
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), lipgloss.NewStyle().Faint(true).Render(warning))
 		}
 		if len(anchors) == 0 {
 			fmt.Println(lipgloss.NewStyle().Faint(true).Render("No anchors defined for this PR."))

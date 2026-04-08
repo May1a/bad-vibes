@@ -19,6 +19,8 @@ var (
 	styleDate       = lipgloss.NewStyle().Foreground(lipgloss.Color("#64748b")).Faint(true)
 	styleAnchorTag  = lipgloss.NewStyle().Foreground(lipgloss.Color("#c084fc")).Bold(true)
 	styleThreadHunk = lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("#475569"))
+	styleIndex      = lipgloss.NewStyle().Foreground(lipgloss.Color("#818cf8")).Bold(true)
+	styleCountHead  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#e2e8f0"))
 
 	reAnchorTag = regexp.MustCompile(`#[\w-]+`)
 )
@@ -43,16 +45,27 @@ func PrintThreads(threads []model.ReviewThread, anchors []model.Anchor, opts Thr
 		anchorByThread[a.ThreadID] = append(anchorByThread[a.ThreadID], "#"+a.Tag)
 	}
 
+	fmt.Println(styleCountHead.Render(fmt.Sprintf("%d unresolved thread%s", len(threads), pluralize(len(threads)))))
+	fmt.Println(strings.Repeat("─", 24))
+
 	for i, t := range threads {
 		if i > 0 {
 			fmt.Println()
 		}
-		printThread(t, anchorByThread, opts)
+		printThread(t, i+1, anchorByThread, opts)
 	}
 }
 
-func printThread(t model.ReviewThread, anchorByThread map[string][]string, opts ThreadRenderOptions) {
+func pluralize(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+func printThread(t model.ReviewThread, index int, anchorByThread map[string][]string, opts ThreadRenderOptions) {
 	header := styleThreadFile.Render(threadLocation(t)) + "  " + styleThreadID.Render("["+t.ID+"]")
+	header += "  " + styleIndex.Render("#"+fmt.Sprintf("%d", index))
 	if t.IsOutdated {
 		header += "  " + styleOutdated.Render("[OUTDATED]")
 	}
@@ -83,7 +96,8 @@ func printThread(t model.ReviewThread, anchorByThread map[string][]string, opts 
 	if !opts.Verbose {
 		c := t.Comments[len(t.Comments)-1]
 		fmt.Println("  " + styleAuthor.Render("@"+c.Author) + "  " + styleDate.Render(formatDate(c.CreatedAt)))
-		for bodyLine := range strings.SplitSeq(previewBody(c.Body), "\n") {
+		body := renderCommentBody(c, false)
+		for bodyLine := range strings.SplitSeq(body, "\n") {
 			fmt.Println("  " + bodyLine)
 		}
 		if len(t.Comments) > 1 {
@@ -97,10 +111,24 @@ func printThread(t model.ReviewThread, anchorByThread map[string][]string, opts 
 			fmt.Println()
 		}
 		fmt.Println("  " + styleAuthor.Render("@"+c.Author) + "  " + styleDate.Render(formatDate(c.CreatedAt)))
-		for bodyLine := range strings.SplitSeq(highlightAnchors(strings.TrimSpace(c.Body)), "\n") {
+		body := renderCommentBody(c, true)
+		for bodyLine := range strings.SplitSeq(highlightAnchors(body), "\n") {
 			fmt.Println("  " + bodyLine)
 		}
 	}
+}
+
+func renderCommentBody(c model.Comment, verbose bool) string {
+	if !isCodeRabbit(c.Author) {
+		if verbose {
+			return strings.TrimSpace(c.Body)
+		}
+		return previewBody(c.Body)
+	}
+	if verbose {
+		return SanitizeCodeRabbitBody(c.Body)
+	}
+	return codeRabbitCompactBody(c.Body)
 }
 
 func threadLocation(t model.ReviewThread) string {

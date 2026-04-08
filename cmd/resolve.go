@@ -14,8 +14,10 @@ import (
 )
 
 var (
-	resolveID        string
-	resolveTargetCfg targetFlags
+	resolveID            string
+	resolveTargetCfg     targetFlags
+	resolveAuthor        string
+	resolveExcludeAuthor string
 )
 
 var (
@@ -32,11 +34,15 @@ var resolveCmd = &cobra.Command{
 Without --id, resolves the first unresolved thread shown by bv comments.
 With --id, resolves the given thread ID (GraphQL node ID, #anchor-tag, or numeric index) directly.
 
+When using a numeric index with --author or --exclude-author, the same filters are
+applied so the index matches the output of "bv comments --author ...".
+
 Examples:
   bv resolve
   bv resolve --pr 42 --id #perf
   bv resolve --id PRRT_abc123
-  bv resolve --id 1`,
+  bv resolve --id 1
+  bv resolve --id 1 --author coderabbitai`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -55,6 +61,7 @@ Examples:
 				return err
 			}
 			unresolved := github.UnresolvedThreads(threads)
+			unresolved = filterThreadsByAuthor(unresolved, resolveAuthor, resolveExcludeAuthor)
 			idx, _ := strconv.Atoi(resolveID)
 			if idx < 1 || idx > len(unresolved) {
 				return fmt.Errorf("thread index #%d out of range (1–%d)", idx, len(unresolved))
@@ -202,6 +209,8 @@ func formatAnchorLocation(anchor model.Anchor) string {
 func init() {
 	addTargetFlags(resolveCmd, &resolveTargetCfg)
 	resolveCmd.Flags().StringVar(&resolveID, "id", "", "Thread ID (GraphQL node ID, #anchor-tag, or numeric index)")
+	resolveCmd.Flags().StringVar(&resolveAuthor, "author", "", "Apply author filter (same as bv comments --author)")
+	resolveCmd.Flags().StringVar(&resolveExcludeAuthor, "exclude-author", "", "Apply exclude-author filter (same as bv comments --exclude-author)")
 }
 
 func isNumericIndex(s string) bool {

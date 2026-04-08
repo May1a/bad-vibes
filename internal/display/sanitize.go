@@ -16,6 +16,7 @@ var (
 	reDetailsBlock  = regexp.MustCompile(`(?s)<details>.*?</details>`)
 	reCollapseBlank = regexp.MustCompile(`\n{3,}`)
 	reSeverityLine  = regexp.MustCompile(`^_(.+?)_$`)
+	reTwoBadgeLine  = regexp.MustCompile(`^_(.+?)_\s*\|\s*_(.+?)_$`)
 	reBoldTitle     = regexp.MustCompile(`^\*\*(.+?)\*\*$`)
 	reShareLink     = regexp.MustCompile(`(?m)^\[.*?\]\(https://coderabbit\.ai.*?\)$`)
 )
@@ -59,6 +60,10 @@ func ExtractCodeRabbitSummary(body string) codeRabbitSummary {
 		trimmed := strings.TrimSpace(line)
 
 		if severity == "" {
+			if m := reTwoBadgeLine.FindStringSubmatch(trimmed); m != nil {
+				severity = m[1] + " | " + m[2]
+				continue
+			}
 			if m := reSeverityLine.FindStringSubmatch(trimmed); m != nil {
 				severity = m[1]
 				continue
@@ -108,7 +113,8 @@ func codeRabbitSeverityStyle(severity string) string {
 }
 
 func codeRabbitCompactBody(body string) string {
-	summary := ExtractCodeRabbitSummary(body)
+	clean := SanitizeCodeRabbitBody(body)
+	summary := ExtractCodeRabbitSummary(clean)
 	parts := []string{}
 	if summary.Severity != "" {
 		parts = append(parts, codeRabbitSeverityStyle(summary.Severity))
@@ -119,5 +125,9 @@ func codeRabbitCompactBody(body string) string {
 	if summary.Description != "" {
 		parts = append(parts, summary.Description)
 	}
-	return strings.Join(parts, " ")
+	compact := strings.Join(parts, " ")
+	if strings.TrimSpace(compact) != "" {
+		return compact
+	}
+	return previewBody(clean)
 }

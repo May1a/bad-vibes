@@ -109,3 +109,44 @@ func TestIsCodeRabbit(t *testing.T) {
 		t.Error("expected human not to match")
 	}
 }
+
+func TestExtractCodeRabbitSummary_TwoBadgePrefix(t *testing.T) {
+	body := "_⚠️ Potential issue_ | _🟠 Major_\n\n**Fix the race condition**\n\nThe concurrent access is not guarded.\n\n<details><summary>fix</summary>x</details>"
+	summary := ExtractCodeRabbitSummary(body)
+	if summary.Severity != "⚠️ Potential issue | 🟠 Major" {
+		t.Fatalf("expected severity %q, got %q", "⚠️ Potential issue | 🟠 Major", summary.Severity)
+	}
+	if summary.Title != "Fix the race condition" {
+		t.Fatalf("expected title %q, got %q", "Fix the race condition", summary.Title)
+	}
+}
+
+func TestExtractCodeRabbitSummary_TwoBadgePrefixNoTitle(t *testing.T) {
+	body := "_⚠️ Potential issue_ | _🟠 Major_\n\n<details><summary>🔧 Proposed fix</summary>fix</details>"
+	summary := ExtractCodeRabbitSummary(body)
+	if summary.Severity != "⚠️ Potential issue | 🟠 Major" {
+		t.Fatalf("expected severity %q, got %q", "⚠️ Potential issue | 🟠 Major", summary.Severity)
+	}
+	if summary.Title != "" {
+		t.Fatalf("expected empty title, got %q", summary.Title)
+	}
+}
+
+func TestCodeRabbitCompactBody_FallbackOnHTMLCommentPrefix(t *testing.T) {
+	body := "<!-- fingerprinting:phantom:medusa:abc123 -->\nPlain text review comment without any markdown structure."
+	got := codeRabbitCompactBody(body)
+	if got == "" {
+		t.Fatal("expected non-empty fallback when no structured summary found")
+	}
+	if strings.Contains(got, "<!--") {
+		t.Fatalf("expected HTML comments stripped from fallback, got %q", got)
+	}
+}
+
+func TestCodeRabbitCompactBody_FallbackOnPlainText(t *testing.T) {
+	body := "This is a plain text bot reply with no severity or title markup."
+	got := codeRabbitCompactBody(body)
+	if got == "" {
+		t.Fatal("expected non-empty fallback for plain text body")
+	}
+}

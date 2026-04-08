@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	anchorutil "github.com/may1a/bad-vibes/internal/anchors"
@@ -88,9 +89,16 @@ func filterThreadsByAuthor(threads []model.ReviewThread, author, excludeAuthor s
 	return filtered
 }
 
+func normalizeAuthor(author string) string {
+	author = strings.TrimSpace(strings.TrimPrefix(author, "@"))
+	author = strings.ToLower(author)
+	return strings.TrimSuffix(author, "[bot]")
+}
+
 func threadHasAuthor(t model.ReviewThread, author string) bool {
+	wanted := normalizeAuthor(author)
 	for _, c := range t.Comments {
-		if c.Author == author {
+		if normalizeAuthor(c.Author) == wanted {
 			return true
 		}
 	}

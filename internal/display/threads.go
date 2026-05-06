@@ -39,12 +39,7 @@ func highlightAnchors(body string) string {
 
 // PrintThreads renders a slice of review threads to stdout.
 // The caller is responsible for pre-filtering (e.g. only unresolved threads).
-func PrintThreads(threads []model.ReviewThread, anchors []model.Anchor, opts ThreadRenderOptions) {
-	anchorByThread := map[string][]string{}
-	for _, a := range anchors {
-		anchorByThread[a.ThreadID] = append(anchorByThread[a.ThreadID], "#"+a.Tag)
-	}
-
+func PrintThreads(threads []model.ReviewThread, opts ThreadRenderOptions) {
 	fmt.Println(styleCountHead.Render(fmt.Sprintf("%d unresolved thread%s", len(threads), pluralize(len(threads)))))
 	fmt.Println(strings.Repeat("─", 24))
 
@@ -52,7 +47,7 @@ func PrintThreads(threads []model.ReviewThread, anchors []model.Anchor, opts Thr
 		if i > 0 {
 			fmt.Println()
 		}
-		printThread(t, i+1, anchorByThread, opts)
+		printThread(t, i+1, opts)
 	}
 }
 
@@ -63,14 +58,11 @@ func pluralize(n int) string {
 	return "s"
 }
 
-func printThread(t model.ReviewThread, index int, anchorByThread map[string][]string, opts ThreadRenderOptions) {
+func printThread(t model.ReviewThread, index int, opts ThreadRenderOptions) {
 	header := styleThreadFile.Render(threadLocation(t)) + "  " + styleThreadID.Render("["+t.ID+"]")
 	header += "  " + styleIndex.Render("#"+fmt.Sprintf("%d", index))
 	if t.IsOutdated {
 		header += "  " + styleOutdated.Render("[OUTDATED]")
-	}
-	if tags, ok := anchorByThread[t.ID]; ok {
-		header += "  " + styleAnchorTag.Render(strings.Join(tags, " "))
 	}
 	fmt.Println(header)
 

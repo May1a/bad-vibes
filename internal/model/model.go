@@ -64,16 +64,6 @@ type Comment struct {
 	CreatedAt time.Time
 }
 
-// Anchor is a user-defined local alias for a review thread.
-type Anchor struct {
-	Tag      string // e.g. "perf" (without the #)
-	ThreadID string // GraphQL node ID of the ReviewThread
-	Path     string // file path for display convenience
-	Line     int
-	Body     string // first comment body snippet
-	Created  time.Time
-}
-
 // PRCache is the on-disk structure stored at
 // ~/.cache/bad-vibes/<owner>/<repo>/<number>.json
 type PRCache struct {
@@ -82,5 +72,41 @@ type PRCache struct {
 	Number  int
 	PRID    string // GraphQL node ID of the PR
 	HeadSHA string // cached head commit OID
-	Anchors []Anchor
+}
+
+type IssueStatus string
+
+const (
+	IssueStatusOpen   IssueStatus = "open"
+	IssueStatusClosed IssueStatus = "closed"
+)
+
+// Issue is a repo-level work item stored in <repo-root>/.bv/issues/<id>.json.
+type Issue struct {
+	ID        string      `json:"id"`
+	Title     string      `json:"title"`
+	Body      string      `json:"body"`
+	Status    IssueStatus `json:"status"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+// PendingComment is a staged comment in a review session (not yet submitted to GitHub).
+type PendingComment struct {
+	Path string `json:"path"`
+	Line int    `json:"line"`
+	Side string `json:"side"`
+	Body string `json:"body"`
+}
+
+// ReviewSession is the on-disk state for an active review session, stored at
+// ~/.bv/<owner>/<repo>/<number>.json
+type ReviewSession struct {
+	Owner           string           `json:"owner"`
+	Repo            string           `json:"repo"`
+	Number          int              `json:"number"`
+	PRID            string           `json:"pr_id"`
+	HeadSHA         string           `json:"head_sha"`
+	StartedAt       time.Time        `json:"started_at"`
+	PendingComments []PendingComment `json:"pending_comments"`
 }

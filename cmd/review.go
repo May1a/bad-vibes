@@ -1,44 +1,34 @@
 package cmd
 
-import (
-	"fmt"
+import "github.com/spf13/cobra"
 
-	"github.com/may1a/bad-vibes/internal/display"
-	"github.com/may1a/bad-vibes/internal/github"
-	"github.com/spf13/cobra"
-)
+var reviewCmd = &cobra.Command{
+	Use:   "review",
+	Short: "Manage a code review session",
+	Long: `Start, work in, and finish a stateful PR review session.
 
-var diffTarget targetFlags
-
-var diffCmd = &cobra.Command{
-	Use:   "diff",
-	Short: "Display the PR diff",
-	Long: `Display the PR diff with colored line numbers.
+A review session stages your comments locally and submits them all at once
+as a proper GitHub review when you run "bv review finish".
 
 Examples:
-  bv diff
-  bv diff --pr 42`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		target, err := resolveTarget(cmd, diffTarget)
-		if err != nil {
-			return err
-		}
-		ref := target.Ref
-		diff, err := github.FetchDiff(ghClient, ctx, ref)
-		if err != nil {
-			return err
-		}
-		if diff == "" {
-			fmt.Println("No diff available.")
-			return nil
-		}
-		display.PrintDiff(diff)
-		return nil
-	},
+  bv review start 42
+  bv review threads
+  bv review add cmd/root.go:55 "Needs a guard here"
+  bv review status
+  bv review finish --approve`,
 }
 
 func init() {
-	addTargetFlags(diffCmd, &diffTarget)
+	reviewCmd.AddCommand(
+		reviewStartCmd,
+		reviewStatusCmd,
+		reviewThreadsCmd,
+		reviewAddCmd,
+		reviewResolveCmd,
+		reviewFinishCmd,
+		reviewAbortCmd,
+		reviewDiffCmd,
+		reviewSummaryCmd,
+		reviewPrsCmd,
+	)
 }

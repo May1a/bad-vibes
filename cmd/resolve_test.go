@@ -6,51 +6,58 @@ import (
 	"github.com/may1a/bad-vibes/internal/model"
 )
 
-func TestResolveSelectionWithoutIDUsesFirstUnresolvedThread(t *testing.T) {
-	selection, err := resolveSelection(model.PRRef{Number: 5}, "", nil, []model.ReviewThread{
-		{ID: "resolved", IsResolved: true, Path: "ignored.go", Line: 1},
-		{ID: "first", Path: "cmd/root.go", Line: 10},
-		{ID: "second", Path: "cmd/comment.go", Line: 20},
-	})
-	if err != nil {
-		t.Fatalf("resolveSelection() error = %v", err)
+func TestThreadLabel(t *testing.T) {
+	cases := []struct {
+		thread model.ReviewThread
+		want   string
+	}{
+		{model.ReviewThread{Path: "", Line: 0}, "PR-level comment"},
+		{model.ReviewThread{Path: "cmd/root.go", Line: 42}, "cmd/root.go:42"},
+		{model.ReviewThread{Path: "cmd/root.go", Line: 0}, "cmd/root.go"},
 	}
-	if selection.ThreadID != "first" {
-		t.Fatalf("expected first unresolved thread, got %+v", selection)
-	}
-	if selection.Description != "cmd/root.go:10" {
-		t.Fatalf("unexpected selection description: %+v", selection)
-	}
-}
-
-func TestResolveSelectionAnchorUsesProvidedThreads(t *testing.T) {
-	selection, err := resolveSelection(model.PRRef{Number: 5}, "#perf", nil, []model.ReviewThread{
-		{
-			ID:   "thread-1",
-			Path: "cmd/root.go",
-			Line: 42,
-			Comments: []model.Comment{
-				{Body: "#perf tighten this up"},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("resolveSelection() error = %v", err)
-	}
-	if selection.ThreadID != "thread-1" {
-		t.Fatalf("expected provided thread snapshot to resolve anchor, got %+v", selection)
+	for _, c := range cases {
+		got := threadLabel(c.thread)
+		if got != c.want {
+			t.Errorf("threadLabel(%+v) = %q, want %q", c.thread, got, c.want)
+		}
 	}
 }
 
-func TestResolveSelectionPRLevelUsesFirstPRLevelThread(t *testing.T) {
-	selection, err := resolveSelection(model.PRRef{Number: 5}, "#PR", nil, []model.ReviewThread{
-		{ID: "line", Path: "cmd/root.go", Line: 10},
-		{ID: "pr", Path: ""},
-	})
-	if err != nil {
-		t.Fatalf("resolveSelection() error = %v", err)
+func TestIsNumericIndex(t *testing.T) {
+	cases := []struct {
+		s    string
+		want bool
+	}{
+		{"", false},
+		{"1", true},
+		{"42", true},
+		{"0", true},
+		{"abc", false},
+		{"#perf", false},
+		{"PRRT_abc", false},
 	}
-	if selection.ThreadID != "pr" || selection.Description != "PR-level comment" {
-		t.Fatalf("unexpected PR-level selection: %+v", selection)
+	for _, c := range cases {
+		got := isNumericIndex(c.s)
+		if got != c.want {
+			t.Errorf("isNumericIndex(%q) = %v, want %v", c.s, got, c.want)
+		}
+	}
+}
+
+func TestExtractFirstBoldTitle(t *testing.T) {
+	cases := []struct {
+		body string
+		want string
+	}{
+		{"**Performance Issue**\nsome text", "Performance Issue"},
+		{"no bold here", ""},
+		{"**bold**", "bold"},
+		{"  **spaced**  ", "spaced"},
+	}
+	for _, c := range cases {
+		got := extractFirstBoldTitle(c.body)
+		if got != c.want {
+			t.Errorf("extractFirstBoldTitle(%q) = %q, want %q", c.body, got, c.want)
+		}
 	}
 }

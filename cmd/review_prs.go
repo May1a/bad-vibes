@@ -12,12 +12,12 @@ import (
 )
 
 var (
-	prsAllBranches bool
-	prsBranch      string
-	prsClosed      bool
+	reviewPrsAllBranches bool
+	reviewPrsBranch      string
+	reviewPrsClosed      bool
 )
 
-var prsCmd = &cobra.Command{
+var reviewPrsCmd = &cobra.Command{
 	Use:   "prs",
 	Short: "List pull requests",
 	Long: `List pull requests for the current repo.
@@ -27,35 +27,35 @@ Use --all-branches to see PRs across all branches.
 Use --closed to see closed and merged PRs instead.
 
 Examples:
-  bv prs                    # open PRs on current branch
-  bv prs --all-branches     # open PRs across all branches
-  bv prs --branch feat/x    # open PRs on a specific branch
-  bv prs --closed           # closed and merged PRs`,
+  bv review prs
+  bv review prs --all-branches
+  bv review prs --branch feat/x
+  bv review prs --closed`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		repo, err := git.RemoteRepo()
 		if err != nil {
-			return fmt.Errorf("could not resolve target repository\n  why: %v\n  try: bv prs from inside a GitHub checkout", err)
+			return fmt.Errorf("could not resolve target repository\n  why: %v\n  try: bv review prs from inside a GitHub checkout", err)
 		}
 		owner, repoName, err := splitRepo(repo)
 		if err != nil {
 			return fmt.Errorf("could not detect repository from git remote; ensure you're in a git repo with a GitHub remote")
 		}
 		base := model.PRRef{Owner: owner, Repo: repoName}
-		states := github.ListStates(prsClosed)
-		if prsAllBranches && prsBranch != "" {
+		states := github.ListStates(reviewPrsClosed)
+		if reviewPrsAllBranches && reviewPrsBranch != "" {
 			return fmt.Errorf("--all-branches and --branch are mutually exclusive")
 		}
 
 		branch, err := git.CurrentBranch()
-		if err != nil && !prsAllBranches && prsBranch == "" {
-			return fmt.Errorf("could not resolve target branch\n  why: %v\n  try: bv prs --all-branches", err)
+		if err != nil && !reviewPrsAllBranches && reviewPrsBranch == "" {
+			return fmt.Errorf("could not resolve target branch\n  why: %v\n  try: bv review prs --all-branches", err)
 		}
-		if prsAllBranches {
+		if reviewPrsAllBranches {
 			branch = ""
-		} else if prsBranch != "" {
-			branch = prsBranch
+		} else if reviewPrsBranch != "" {
+			branch = reviewPrsBranch
 		}
 
 		prs, err := github.FetchPRs(ghClient, ctx, base, branch, states)
@@ -71,14 +71,13 @@ Examples:
 		yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("#facc15"))
 		cyan := lipgloss.NewStyle().Foreground(lipgloss.Color("#38bdf8"))
 
-		// Header
 		filterDesc := "open · " + branch
-		if prsAllBranches {
+		if reviewPrsAllBranches {
 			filterDesc = "open · all branches"
-		} else if prsBranch != "" {
-			filterDesc = "open · " + prsBranch
+		} else if reviewPrsBranch != "" {
+			filterDesc = "open · " + reviewPrsBranch
 		}
-		if prsClosed {
+		if reviewPrsClosed {
 			filterDesc = strings.Replace(filterDesc, "open", "closed+merged", 1)
 		}
 		fmt.Printf("\n  %s  %s\n\n", bold.Render(base.Owner+"/"+base.Repo), dim.Render("("+filterDesc+")"))
@@ -109,10 +108,7 @@ Examples:
 			if len(runes) > 55 {
 				title = string(runes[:54]) + "…"
 			}
-
-			fmt.Printf("  %s  %s  %-55s  %s  %s\n",
-				num, state, title, branchCol, author,
-			)
+			fmt.Printf("  %s  %s  %-55s  %s  %s\n", num, state, title, branchCol, author)
 		}
 		fmt.Println()
 		return nil
@@ -120,7 +116,7 @@ Examples:
 }
 
 func init() {
-	prsCmd.Flags().BoolVar(&prsAllBranches, "all-branches", false, "Show PRs from all branches")
-	prsCmd.Flags().StringVar(&prsBranch, "branch", "", "Show PRs for a specific branch")
-	prsCmd.Flags().BoolVar(&prsClosed, "closed", false, "Show closed and merged PRs instead of open")
+	reviewPrsCmd.Flags().BoolVar(&reviewPrsAllBranches, "all-branches", false, "Show PRs from all branches")
+	reviewPrsCmd.Flags().StringVar(&reviewPrsBranch, "branch", "", "Show PRs for a specific branch")
+	reviewPrsCmd.Flags().BoolVar(&reviewPrsClosed, "closed", false, "Show closed and merged PRs instead of open")
 }

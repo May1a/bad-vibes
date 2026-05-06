@@ -57,29 +57,3 @@ func Save(ref model.PRRef, c model.PRCache) error {
 	}
 	return os.Rename(tmp, path)
 }
-
-// AddAnchor appends an anchor to the PR cache, replacing any existing anchor with the same tag.
-func AddAnchor(ref model.PRRef, a model.Anchor) error {
-	c, err := Load(ref)
-	if err != nil {
-		return err
-	}
-	// Replace if tag already exists
-	for i, existing := range c.Anchors {
-		if existing.Tag == a.Tag {
-			c.Anchors[i] = a
-			return Save(ref, c)
-		}
-	}
-	c.Anchors = append(c.Anchors, a)
-	return Save(ref, c)
-}
-
-// ListAnchors returns all anchors for a PR.
-func ListAnchors(ref model.PRRef) ([]model.Anchor, error) {
-	c, err := Load(ref)
-	if err != nil {
-		return nil, err
-	}
-	return c.Anchors, nil
-}

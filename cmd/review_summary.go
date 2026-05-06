@@ -11,20 +11,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var summaryTarget targetFlags
+var reviewSummaryTarget targetFlags
 
-var summaryCmd = &cobra.Command{
+var reviewSummaryCmd = &cobra.Command{
 	Use:   "summary",
 	Short: "Show a tidy PR overview",
 	Long: `Show title, author, state, diff stats, unresolved thread count, and changed files.
 
 Examples:
-  bv summary
-  bv summary --pr 42`,
+  bv review summary
+  bv review summary --pr 42`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		target, err := resolveTarget(cmd, summaryTarget)
+		target, err := resolveTarget(cmd, reviewSummaryTarget)
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ Examples:
 }
 
 func init() {
-	addTargetFlags(summaryCmd, &summaryTarget)
+	addTargetFlags(reviewSummaryCmd, &reviewSummaryTarget)
 }
 
 func formatSummaryFileStatus(file model.PRFile) string {

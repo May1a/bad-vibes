@@ -29,28 +29,28 @@ var rootCmd = &cobra.Command{
 	Short: "bad vibes — focused AI-assisted PR review",
 	Long: `bad vibes cuts through the noise of PR review.
 
-Surface only unresolved comments, post pointed feedback, and resolve
-threads without the garbage that gh dumps by default.
+Surface unresolved threads, post pointed feedback, and track issues
+without the noise that GitHub's own UI buries them in.
 
 Targeting modes:
-  Explicit:    bv summary --repo owner/repo --pr 42
-  Auto-detect: bv summary # latest open PR on current branch`,
-	Example: `  bv summary
-  bv comments
-  bv comment cmd/root.go:42 "Needs a guard here"`,
+  Explicit:    bv review summary --repo owner/repo --pr 42
+  Auto-detect: bv review summary # latest open PR on current branch`,
+	Example: `  bv review start 42
+  bv review threads
+  bv review add cmd/root.go:42 "Needs a guard here"
+  bv review finish --approve
+  bv issue new "Cache invalidation is too aggressive"`,
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if !requiresRepoContext(cmd) {
 			return nil
 		}
 
-		// Resolve GitHub auth token
 		token, err := auth.Token()
 		if err != nil {
 			return err
 		}
 
-		// Initialize GitHub client with retry logic and rate limit handling
 		ghClient = github.NewClient(token)
 		github.SetClient(ghClient)
 		return nil
@@ -59,8 +59,7 @@ Targeting modes:
 
 func requiresRepoContext(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
-		switch c.Name() {
-		case "diff", "comments", "comment", "resolve", "summary", "anchors", "prs":
+		if c.Name() == "review" {
 			return true
 		}
 	}
@@ -69,12 +68,7 @@ func requiresRepoContext(cmd *cobra.Command) bool {
 
 func init() {
 	rootCmd.AddCommand(
-		diffCmd,
-		commentsCmd,
-		commentCmd,
-		resolveCmd,
-		summaryCmd,
-		anchorsCmd,
-		prsCmd,
+		reviewCmd,
+		issueCmd,
 	)
 }
